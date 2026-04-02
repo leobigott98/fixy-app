@@ -64,6 +64,15 @@ export default async function VehicleDetailPage({ params }: VehicleDetailPagePro
         action={{ label: "Editar vehiculo", icon: <SquarePen className="size-4" />, href: getVehicleEditHref(vehicle.id) }}
       />
 
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button asChild variant="primary">
+          <Link href={`/app/quotes/new?clientId=${vehicle.client_id ?? ""}&vehicleId=${vehicle.id}` as Route}>
+            <ClipboardList className="size-4" />
+            Nuevo presupuesto
+          </Link>
+        </Button>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Presupuestos" value={String(quotes.length)} />
         <Metric label="Ordenes" value={String(workOrders.length)} />

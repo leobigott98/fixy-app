@@ -63,6 +63,21 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
         action={{ label: "Editar cliente", icon: <SquarePen className="size-4" />, href: getClientEditHref(client.id) }}
       />
 
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button asChild variant="primary">
+          <Link href={`/app/quotes/new?clientId=${client.id}` as Route}>
+            <ReceiptText className="size-4" />
+            Nuevo presupuesto
+          </Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href={`/app/vehicles/new?clientId=${client.id}` as Route}>
+            <CarFront className="size-4" />
+            Nuevo vehiculo
+          </Link>
+        </Button>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Vehiculos" value={String(vehicles.length)} />
         <Metric label="Presupuestos" value={String(quotes.length)} />
