@@ -2,12 +2,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { sessionCookieName } from "@/lib/auth/constants";
+import { getDisplayNameFromEmail, parseSessionCookieValue } from "@/lib/auth/session-utils";
 
 export type AppSession = {
   user: {
+    email: string;
     name: string;
     role: string;
-    workshopName: string;
   };
 };
 
@@ -19,11 +20,13 @@ export async function getAppSession(): Promise<AppSession | null> {
     return null;
   }
 
+  const email = parseSessionCookieValue(sessionCookie.value);
+
   return {
     user: {
-      name: "Luis Mendoza",
+      email,
+      name: getDisplayNameFromEmail(email),
       role: "Encargado",
-      workshopName: "Fixy Garage",
     },
   };
 }

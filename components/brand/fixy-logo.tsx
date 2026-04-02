@@ -1,10 +1,11 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { Wrench } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 type FixyLogoProps = {
-  href?: string;
+  href?: Route;
   className?: string;
   compact?: boolean;
 };

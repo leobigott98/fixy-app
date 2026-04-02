@@ -1,3 +1,5 @@
+import type { Route } from "next";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +12,7 @@ type PageHeaderProps = {
   action?: {
     label: string;
     icon?: ReactNode;
+    href?: Route;
   };
 };
 
@@ -28,10 +31,19 @@ export function PageHeader({ title, description, status, action }: PageHeaderPro
         </div>
       </div>
       {action ? (
-        <Button variant="primary" className="w-full sm:w-auto">
-          {action.icon}
-          {action.label}
-        </Button>
+        action.href ? (
+          <Button asChild variant="primary" className="w-full sm:w-auto">
+            <Link href={action.href}>
+              {action.icon}
+              {action.label}
+            </Link>
+          </Button>
+        ) : (
+          <Button variant="primary" className="w-full sm:w-auto">
+            {action.icon}
+            {action.label}
+          </Button>
+        )
       ) : null}
     </div>
   );

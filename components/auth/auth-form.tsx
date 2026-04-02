@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useState, type ReactNode } from "react";
@@ -7,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { sessionCookieName } from "@/lib/auth/constants";
+import { buildSessionCookieString } from "@/lib/auth/session-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -87,11 +88,26 @@ export function AuthForm({ variant }: AuthFormProps) {
       return;
     }
 
-    document.cookie = `${sessionCookieName}=sprint-0; path=/; max-age=2592000; SameSite=Lax`;
+    document.cookie = buildSessionCookieString(values.email);
     setFeedback("Acceso demo activado. En Sprint 1 esto se reemplaza por Supabase Auth real.");
 
     startTransition(() => {
-      router.push("/app/dashboard");
+      if (variant === "signup") {
+        const params = new URLSearchParams();
+
+        if (values.name) {
+          params.set("ownerName", values.name);
+        }
+
+        if (values.workshopName) {
+          params.set("workshopName", values.workshopName);
+        }
+
+        router.push(`/app/onboarding?${params.toString()}` as Route);
+        return;
+      }
+
+      router.push("/app" as Route);
     });
   });
 

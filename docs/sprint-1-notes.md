@@ -3,8 +3,8 @@
 ## Priority sequence
 
 1. Replace the mock session cookie with real Supabase Auth.
-2. Add workshop setup after signup.
-3. Implement the first operational dashboard backed by real data.
+2. Keep workshop onboarding, but switch ownership from email cookie to auth user id.
+3. Expand the dashboard from workshop profile + counts into real workload monitoring.
 4. Build clients, vehicles and quotes as the first real modules.
 5. Connect WhatsApp-friendly actions from clients, quotes and work orders.
 
@@ -16,12 +16,13 @@
 - visual cards over table-heavy admin patterns
 - auth and app areas separated by route groups
 - reusable module scaffold to keep future screens consistent
+- workshop onboarding and profile editing reuse the same form and Supabase persistence logic
 
 ## Suggested Sprint 1 data work
 
-- Create Supabase schema for `workshops`, `workshop_members`, `clients`, `vehicles`, `quotes`, `quote_items`
-- Add row-level security from the start
-- Create a workshop-scoped `profile -> workshop -> member` access model
+- Extend the current schema for `workshop_members`, `quote_items`, `work_order_services`, `work_order_parts`
+- Replace the temporary server-side admin access with user auth + row-level security
+- Create a workshop-scoped `auth user -> workshop member -> workshop` access model
 - Seed a small demo workspace for local UI iteration
 
 ## First real flows to ship
