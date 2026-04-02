@@ -32,18 +32,18 @@ function formatQuoteStatus(status: string) {
 
 function formatWorkOrderStatus(status: string) {
   switch (status) {
-    case "received":
-      return "Recibido";
-    case "diagnosis":
-      return "Diagnostico";
-    case "in_progress":
-      return "En proceso";
-    case "waiting_parts":
-      return "Esperando repuesto";
-    case "ready":
-      return "Listo";
-    case "delivered":
-      return "Entregado";
+    case "presupuesto_pendiente":
+      return "Presupuesto pendiente";
+    case "diagnostico_pendiente":
+      return "Diagnostico pendiente";
+    case "en_reparacion":
+      return "En reparacion";
+    case "listo_para_entrega":
+      return "Listo para entrega";
+    case "completada":
+      return "Completada";
+    case "cancelada":
+      return "Cancelada";
     default:
       return status;
   }
@@ -68,6 +68,12 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
           <Link href={`/app/quotes/new?clientId=${client.id}` as Route}>
             <ReceiptText className="size-4" />
             Nuevo presupuesto
+          </Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href={`/app/work-orders/new?clientId=${client.id}` as Route}>
+            <Wrench className="size-4" />
+            Nueva orden
           </Link>
         </Button>
         <Button asChild variant="outline">

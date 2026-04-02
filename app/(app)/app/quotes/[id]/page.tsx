@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { CalendarDays, ClipboardList, MessageCircleMore, Send, SquarePen, Wrench } from "lucide-react";
 
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge";
-import { QuoteWorkOrderPlaceholder } from "@/components/quotes/quote-work-order-placeholder";
+import { CreateFromQuoteButton } from "@/components/work-orders/create-from-quote-button";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,7 +59,7 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
                 {quote.notes || "Sin notas adicionales."}
               </div>
             </div>
-            {quote.status === "approved" ? <QuoteWorkOrderPlaceholder /> : null}
+            {quote.status === "approved" ? <CreateFromQuoteButton quoteId={quote.id} /> : null}
           </CardContent>
         </Card>
 

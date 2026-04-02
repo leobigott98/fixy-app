@@ -22,25 +22,25 @@ export default async function DashboardPage() {
     icon: typeof ClipboardList;
   }> = [
     {
-      href: "/app/quotes",
+      href: "/app/quotes/new" as Route,
       title: "Nuevo presupuesto",
       description: "Prepara la ruta para cotizar mas rapido.",
       icon: ClipboardList,
     },
     {
-      href: "/app/work-orders",
+      href: "/app/work-orders/new" as Route,
       title: "Nueva orden",
       description: "Visualiza la operacion y el flujo del taller.",
       icon: Wrench,
     },
     {
-      href: "/app/clients",
+      href: "/app/clients" as Route,
       title: "Agregar cliente",
       description: "Deja lista la base para historial y vehiculos.",
       icon: ContactRound,
     },
     {
-      href: "/app/finances",
+      href: "/app/finances" as Route,
       title: "Registrar cobro",
       description: "Conecta caja, pagos y entregas futuras.",
       icon: Coins,
@@ -180,8 +180,8 @@ export default async function DashboardPage() {
               ))
             ) : (
               <EmptyStateCard
-                actionHref="/app/work-orders"
-                actionLabel="Ir a ordenes"
+                actionHref={"/app/work-orders/new" as Route}
+                actionLabel="Crear orden"
                 description="Aun no hay ordenes registradas. Cuando lleguen, este bloque mostrara seguimiento rapido del taller."
                 icon={<Wrench className="size-5" />}
                 title="Todavia no hay ordenes"

@@ -54,18 +54,18 @@ type PaymentRow = {
 
 function formatDashboardStatus(status: string) {
   switch (status) {
-    case "received":
-      return "Recibido";
-    case "diagnosis":
-      return "Diagnostico";
-    case "in_progress":
-      return "En proceso";
-    case "waiting_parts":
-      return "Esperando repuesto";
-    case "ready":
-      return "Listo";
-    case "delivered":
-      return "Entregado";
+    case "presupuesto_pendiente":
+      return "Presupuesto pendiente";
+    case "diagnostico_pendiente":
+      return "Diagnostico pendiente";
+    case "en_reparacion":
+      return "En reparacion";
+    case "listo_para_entrega":
+      return "Listo para entrega";
+    case "completada":
+      return "Completada";
+    case "cancelada":
+      return "Cancelada";
     default:
       return status;
   }
@@ -157,7 +157,12 @@ export async function getDashboardStats(workshopId: string): Promise<DashboardSt
       .from("work_orders")
       .select("*", { count: "exact", head: true })
       .eq("workshop_id", workshopId)
-      .in("status", ["received", "diagnosis", "in_progress", "waiting_parts", "ready"]),
+      .in("status", [
+        "presupuesto_pendiente",
+        "diagnostico_pendiente",
+        "en_reparacion",
+        "listo_para_entrega",
+      ]),
     supabase
       .from("quotes")
       .select("*", { count: "exact", head: true })
@@ -167,7 +172,11 @@ export async function getDashboardStats(workshopId: string): Promise<DashboardSt
       .from("work_orders")
       .select("*", { count: "exact", head: true })
       .eq("workshop_id", workshopId)
-      .in("status", ["received", "diagnosis", "waiting_parts"]),
+      .in("status", [
+        "presupuesto_pendiente",
+        "diagnostico_pendiente",
+        "en_reparacion",
+      ]),
     supabase
       .from("work_orders")
       .select("id,title,status,vehicle_label,promised_date,total_amount")
