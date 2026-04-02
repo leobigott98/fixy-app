@@ -1,9 +1,10 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { CalendarDays, CarFront, Columns3, FilePlus2, List, SquarePen, UserRound, Wrench } from "lucide-react";
+import { CalendarDays, CarFront, Columns3, FilePlus2, LayoutGrid, SquarePen, TableProperties, UserRound, Wrench } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
+import { ViewToggle } from "@/components/shared/view-toggle";
 import { WorkOrderStatusBadge } from "@/components/work-orders/work-order-status-badge";
 import { WorkOrderStatusControl } from "@/components/work-orders/work-order-status-control";
 import { Badge } from "@/components/ui/badge";
@@ -33,10 +34,14 @@ function getQueryValue(value?: string | string[]) {
 }
 
 function getViewValue(value?: string) {
-  return value === "list" ? "list" : "board";
+  if (value === "cards" || value === "table") {
+    return value;
+  }
+
+  return "board";
 }
 
-function buildViewHref(view: "board" | "list", query?: string) {
+function buildViewHref(view: "board" | "cards" | "table", query?: string) {
   const params = new URLSearchParams();
 
   if (query?.trim()) {
@@ -74,18 +79,12 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
   const view = getViewValue(getQueryValue(params.view));
 
   const boardData = view === "board" ? await getWorkOrdersBoardData(query) : null;
-  const workOrders = view === "list" ? await getWorkOrdersList(query) : null;
+  const workOrders = view === "board" ? await getWorkOrdersList(query) : await getWorkOrdersList(query);
   const visibleOrders =
     view === "board" && boardData
       ? boardData.orderedStatuses.flatMap((status) => boardData.grouped[status])
-      : workOrders ?? [];
-  const totalOrders =
-    view === "board"
-      ? boardData?.orderedStatuses.reduce(
-          (total, status) => total + (boardData.grouped[status]?.length ?? 0),
-          0,
-        ) ?? 0
-      : workOrders?.length ?? 0;
+      : workOrders;
+  const totalOrders = visibleOrders.length;
   const assignedOrders = visibleOrders.filter((order) => order.assignedMechanicName).length;
   const readyOrders = visibleOrders.filter((order) => order.status === "listo_para_entrega").length;
 
@@ -96,7 +95,7 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
         description="Board visual para mover el taller rapido, entender carga activa y seguir cada vehiculo sin perder contexto."
         status="Sprint 4"
         action={{
-          label: "Nueva orden",
+          label: "Nueva Orden",
           icon: <FilePlus2 className="size-4" />,
           href: "/app/work-orders/new" as Route,
         }}
@@ -109,25 +108,33 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
           query={query}
         />
         <div className="flex flex-col gap-3 xl:items-end">
-          <div className="flex gap-2 rounded-[28px] border border-[var(--line)] bg-white/76 p-2 shadow-[0_18px_40px_rgba(21,28,35,0.06)]">
-            <Button asChild variant={view === "board" ? "primary" : "outline"}>
-              <Link href={buildViewHref("board", query)}>
-                <Columns3 className="size-4" />
-                Board
-              </Link>
-            </Button>
-            <Button asChild variant={view === "list" ? "primary" : "outline"}>
-              <Link href={buildViewHref("list", query)}>
-                <List className="size-4" />
-                Lista
-              </Link>
-            </Button>
-          </div>
+          <ViewToggle
+            options={[
+              {
+                href: buildViewHref("board", query),
+                label: "Kanban",
+                icon: <Columns3 className="size-4" />,
+                active: view === "board",
+              },
+              {
+                href: buildViewHref("cards", query),
+                label: "Cards",
+                icon: <LayoutGrid className="size-4" />,
+                active: view === "cards",
+              },
+              {
+                href: buildViewHref("table", query),
+                label: "Tabla",
+                icon: <TableProperties className="size-4" />,
+                active: view === "table",
+              },
+            ]}
+          />
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="primary">
               <Link href={"/app/work-orders/new" as Route}>
                 <FilePlus2 className="size-4" />
-                Crear orden manual
+                Nueva Orden
               </Link>
             </Button>
             <div className="rounded-full bg-[rgba(249,115,22,0.1)] px-4 py-3 text-xs font-semibold text-[var(--primary-strong)]">
@@ -141,7 +148,10 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
         <MetricCard label="Ordenes visibles" value={String(totalOrders)} />
         <MetricCard label="Con responsable" value={String(assignedOrders)} />
         <MetricCard label="Listas para entrega" value={String(readyOrders)} />
-        <MetricCard label="Vista activa" value={view === "board" ? "Board" : "Lista"} />
+        <MetricCard
+          label="Vista activa"
+          value={view === "board" ? "Kanban" : view === "cards" ? "Cards" : "Tabla"}
+        />
       </div>
 
       {totalOrders ? (
@@ -177,9 +187,63 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
               ))}
             </div>
           </div>
+        ) : view === "table" ? (
+          <Card className="bg-white/88">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead className="bg-[rgba(21,28,35,0.04)] text-left text-[var(--muted)]">
+                    <tr>
+                      <th className="px-5 py-4 font-semibold">Orden</th>
+                      <th className="px-5 py-4 font-semibold">Cliente</th>
+                      <th className="px-5 py-4 font-semibold">Vehiculo</th>
+                      <th className="px-5 py-4 font-semibold">Etapa</th>
+                      <th className="px-5 py-4 font-semibold">Responsable</th>
+                      <th className="px-5 py-4 font-semibold">Promesa</th>
+                      <th className="px-5 py-4 font-semibold">Total</th>
+                      <th className="px-5 py-4 font-semibold">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workOrders.map((workOrder) => (
+                      <tr className="border-t border-[var(--line)] align-top" key={workOrder.id}>
+                        <td className="px-5 py-4">
+                          <div className="font-semibold">{workOrder.title}</div>
+                          <div className="mt-1 text-xs text-[var(--muted)]">{workOrder.code || "Sin codigo"}</div>
+                        </td>
+                        <td className="px-5 py-4">{workOrder.client?.full_name || "Cliente pendiente"}</td>
+                        <td className="px-5 py-4">{workOrder.vehicle?.vehicle_label || workOrder.vehicle?.plate || "Vehiculo pendiente"}</td>
+                        <td className="px-5 py-4">
+                          <WorkOrderStatusBadge status={workOrder.status} />
+                        </td>
+                        <td className="px-5 py-4">{workOrder.assignedMechanicName || "Sin responsable"}</td>
+                        <td className="px-5 py-4">{workOrder.promised_date || "Sin fecha"}</td>
+                        <td className="px-5 py-4 font-semibold">
+                          {formatCurrencyDisplay(workOrder.total_amount, workshop.preferred_currency)}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={getWorkOrderEditHref(workOrder.id)}>
+                                <SquarePen className="size-4" />
+                                Editar
+                              </Link>
+                            </Button>
+                            <Button asChild size="sm" variant="primary">
+                              <Link href={getWorkOrderDetailHref(workOrder.id)}>Ver detalle</Link>
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
-            {workOrders?.map((workOrder) => (
+            {workOrders.map((workOrder) => (
               <ListCard
                 currency={workshop.preferred_currency}
                 key={workOrder.id}
@@ -207,7 +271,7 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
             <div className="grid gap-3">
               {[
                 "Cada etapa se lee directo desde el board, sin tablas pesadas.",
-                "Mover la orden entre estados toma un par de toques.",
+                "Tambien puedes revisar ordenes en cards o tabla segun el momento.",
                 "Servicios y repuestos quedan dentro del mismo flujo.",
                 "Los presupuestos aprobados ya se pueden convertir en orden.",
               ].map((item) => (
@@ -269,14 +333,8 @@ function BoardCard({
       <div className="space-y-2 text-sm text-[var(--muted)]">
         <BoardInfo icon={<UserRound className="size-4" />} value={workOrder.client?.full_name || "Cliente pendiente"} />
         <BoardInfo icon={<CarFront className="size-4" />} value={workOrder.vehicle?.vehicle_label || workOrder.vehicle?.plate || "Vehiculo pendiente"} />
-        <BoardInfo
-          icon={<Wrench className="size-4" />}
-          value={workOrder.assignedMechanicName || "Sin responsable"}
-        />
-        <BoardInfo
-          icon={<CalendarDays className="size-4" />}
-          value={workOrder.promised_date || "Sin promesa"}
-        />
+        <BoardInfo icon={<Wrench className="size-4" />} value={workOrder.assignedMechanicName || "Sin responsable"} />
+        <BoardInfo icon={<CalendarDays className="size-4" />} value={workOrder.promised_date || "Sin promesa"} />
       </div>
 
       <div className="flex flex-wrap gap-2">

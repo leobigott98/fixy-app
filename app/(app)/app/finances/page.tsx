@@ -1,11 +1,12 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, Receipt, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, LayoutGrid, Receipt, TableProperties, Wallet } from "lucide-react";
 
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PaymentStatusBadge } from "@/components/finances/payment-status-badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
+import { ViewToggle } from "@/components/shared/view-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import { formatCurrencyDisplay } from "@/lib/utils";
 type FinancesPageProps = {
   searchParams: Promise<{
     q?: string | string[];
+    view?: string | string[];
   }>;
 };
 
@@ -29,10 +31,27 @@ function getQueryValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function getViewValue(value?: string) {
+  return value === "table" ? "table" : "cards";
+}
+
+function buildViewHref(view: "cards" | "table", query?: string) {
+  const params = new URLSearchParams();
+
+  if (query?.trim()) {
+    params.set("q", query.trim());
+  }
+
+  params.set("view", view);
+
+  return `/app/finances?${params.toString()}` as Route;
+}
+
 export default async function FinancesPage({ searchParams }: FinancesPageProps) {
   const workshop = await requireCurrentWorkshop();
   const params = await searchParams;
   const query = getQueryValue(params.q);
+  const view = getViewValue(getQueryValue(params.view));
   const data = await getFinancesOverview(query);
 
   return (
@@ -63,11 +82,29 @@ export default async function FinancesPage({ searchParams }: FinancesPageProps) 
         </Button>
       </div>
 
-      <SearchBar
-        action="/app/finances"
-        placeholder="Busca por cliente, orden, categoria, metodo o nota"
-        query={query}
-      />
+      <div className="grid gap-4 xl:grid-cols-[1fr_auto]">
+        <SearchBar
+          action={`/app/finances?view=${view}`}
+          placeholder="Busca por cliente, orden, categoria, metodo o nota"
+          query={query}
+        />
+        <ViewToggle
+          options={[
+            {
+              href: buildViewHref("cards", query),
+              label: "Cards",
+              icon: <LayoutGrid className="size-4" />,
+              active: view === "cards",
+            },
+            {
+              href: buildViewHref("table", query),
+              label: "Tabla",
+              icon: <TableProperties className="size-4" />,
+              active: view === "table",
+            },
+          ]}
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
@@ -101,183 +138,88 @@ export default async function FinancesPage({ searchParams }: FinancesPageProps) 
         />
       </div>
 
-      <Card className="bg-white/86">
-        <CardHeader>
-          <CardTitle>Saldos pendientes por orden</CardTitle>
-          <CardDescription>
-            Lo justo para saber que falta cobrar y cuales ordenes ya estan comprometidas por fecha.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {data.pendingBalances.length ? (
-            data.pendingBalances.slice(0, 8).map((item) => (
-              <div
-                key={item.workOrder.id}
-                className="flex flex-col gap-4 rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 xl:flex-row xl:items-center xl:justify-between"
-              >
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {item.isOverdue ? <Badge variant="primary">Vencida</Badge> : <Badge>Por cobrar</Badge>}
-                    {item.workOrder.code ? <Badge>{item.workOrder.code}</Badge> : null}
-                  </div>
-                  <div>
-                    <Link
-                      className="font-semibold hover:text-[var(--primary-strong)]"
-                      href={`/app/work-orders/${item.workOrder.id}` as Route}
-                    >
+      {view === "table" ? (
+        <div className="space-y-4">
+          <FinanceTableCard
+            columns={["Orden", "Cliente", "Cobrado", "Pendiente", "Promesa"]}
+            description="Lectura de pendientes por cobrar en formato tabla."
+            title="Saldos pendientes por orden"
+          >
+            {data.pendingBalances.length ? (
+              data.pendingBalances.map((item) => (
+                <tr className="border-t border-[var(--line)] align-top" key={item.workOrder.id}>
+                  <td className="px-5 py-4">
+                    <Link className="font-semibold hover:text-[var(--primary-strong)]" href={`/app/work-orders/${item.workOrder.id}` as Route}>
                       {item.workOrder.title}
                     </Link>
-                    <div className="mt-1 text-sm text-[var(--muted)]">
-                      {item.client?.full_name || "Cliente pendiente"} -{" "}
-                      {item.workOrder.vehicle_label || "Vehiculo pendiente"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[460px]">
-                  <MetricBlock
-                    label="Cobrado"
-                    value={formatCurrencyDisplay(item.collectedAmount, workshop.preferred_currency)}
-                  />
-                  <MetricBlock
-                    label="Pendiente"
-                    value={formatCurrencyDisplay(item.pendingBalance, workshop.preferred_currency)}
-                  />
-                  <MetricBlock
-                    label="Promesa"
-                    value={item.workOrder.promised_date || "Sin fecha"}
-                  />
-                </div>
-              </div>
-            ))
-          ) : (
-            <EmptyMessage text="No hay saldos pendientes con los filtros actuales." />
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="bg-white/86">
-          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Historial de pagos</CardTitle>
-              <CardDescription>
-                Ultimos movimientos de cobro con estado y metodo visibles.
-              </CardDescription>
-            </div>
-            <Button asChild variant="outline">
-              <Link href={getFinancePaymentNewHref()}>
-                <ArrowUpRight className="size-4" />
-                Nuevo pago
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.paymentHistory.length ? (
-              data.paymentHistory.slice(0, 10).map((item) => (
-                <div
-                  key={item.payment.id}
-                  className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <PaymentStatusBadge status={item.payment.status} />
-                    <Badge>{getPaymentMethodLabel(item.payment.method)}</Badge>
-                  </div>
-                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="font-semibold">
-                        {item.client?.full_name || "Cliente sin nombre"}
-                      </div>
-                      <div className="mt-1 text-sm text-[var(--muted)]">
-                        {item.workOrder ? item.workOrder.title : "Pago sin orden vinculada"}
-                      </div>
-                      {item.payment.notes ? (
-                        <div className="mt-2 text-sm text-[var(--muted)]">{item.payment.notes}</div>
-                      ) : null}
-                      {item.payment.proof_url ? (
-                        <div className="mt-2 flex flex-wrap gap-3">
-                          <a
-                            className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
-                            href={item.payment.proof_url}
-                            rel="noreferrer"
-                            target="_blank"
-                          >
-                            Ver comprobante
-                          </a>
-                          <Link
-                            className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
-                            href={getPaymentReceiptHref(item.payment.id)}
-                          >
-                            Recibo PDF
-                          </Link>
-                        </div>
-                      ) : (
-                        <Link
-                          className="mt-2 inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
-                          href={getPaymentReceiptHref(item.payment.id)}
-                        >
-                          Recibo PDF
-                        </Link>
-                      )}
-                    </div>
-                    <div className="text-left sm:text-right">
-                      <div className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
-                        {formatCurrencyDisplay(item.payment.amount, workshop.preferred_currency)}
-                      </div>
-                      <div className="mt-1 text-sm text-[var(--muted)]">
-                        {new Date(item.payment.paid_at).toLocaleDateString("es-VE")}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                    <div className="mt-1 text-xs text-[var(--muted)]">{item.workOrder.code || "Sin codigo"}</div>
+                  </td>
+                  <td className="px-5 py-4">{item.client?.full_name || "Cliente pendiente"}</td>
+                  <td className="px-5 py-4">{formatCurrencyDisplay(item.collectedAmount, workshop.preferred_currency)}</td>
+                  <td className="px-5 py-4 font-semibold">{formatCurrencyDisplay(item.pendingBalance, workshop.preferred_currency)}</td>
+                  <td className="px-5 py-4">{item.workOrder.promised_date || "Sin fecha"}</td>
+                </tr>
               ))
             ) : (
-              <EmptyMessage text="Todavia no hay pagos registrados con los filtros actuales." />
+              <EmptyTableRow colSpan={5} text="No hay saldos pendientes con los filtros actuales." />
             )}
-          </CardContent>
-        </Card>
+          </FinanceTableCard>
 
-        <Card className="bg-white/86">
-          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Gastos</CardTitle>
-              <CardDescription>
-                Salidas del taller agrupadas de forma simple y legible.
-              </CardDescription>
-            </div>
-            <Button asChild variant="outline">
-              <Link href={getFinanceExpenseNewHref()}>
-                <ArrowDownRight className="size-4" />
-                Nuevo gasto
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.expenses.length ? (
-              data.expenses.slice(0, 10).map((item) => (
-                <div
-                  key={item.expense.id}
-                  className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="primary">{getExpenseCategoryLabel(item.expense.category)}</Badge>
-                    {item.workOrder ? <Badge>{item.workOrder.code || "Orden"}</Badge> : null}
-                  </div>
-                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="font-semibold">
-                        {item.workOrder ? item.workOrder.title : "Gasto general del taller"}
+          <div className="grid gap-4 xl:grid-cols-2">
+            <FinanceTableCard
+              columns={["Cliente", "Orden", "Estado", "Metodo", "Monto", "Fecha"]}
+              description="Historial de cobros en formato tabla."
+              title="Historial de pagos"
+            >
+              {data.paymentHistory.length ? (
+                data.paymentHistory.map((item) => (
+                  <tr className="border-t border-[var(--line)] align-top" key={item.payment.id}>
+                    <td className="px-5 py-4">{item.client?.full_name || "Cliente sin nombre"}</td>
+                    <td className="px-5 py-4">{item.workOrder?.title || "Pago sin orden"}</td>
+                    <td className="px-5 py-4"><PaymentStatusBadge status={item.payment.status} /></td>
+                    <td className="px-5 py-4">{getPaymentMethodLabel(item.payment.method)}</td>
+                    <td className="px-5 py-4 font-semibold">{formatCurrencyDisplay(item.payment.amount, workshop.preferred_currency)}</td>
+                    <td className="px-5 py-4">
+                      <div>{new Date(item.payment.paid_at).toLocaleDateString("es-VE")}</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {item.payment.proof_url ? (
+                          <a className="text-xs font-medium text-[var(--primary-strong)] hover:underline" href={item.payment.proof_url} rel="noreferrer" target="_blank">
+                            Comprobante
+                          </a>
+                        ) : null}
+                        <Link className="text-xs font-medium text-[var(--primary-strong)] hover:underline" href={getPaymentReceiptHref(item.payment.id)}>
+                          Recibo PDF
+                        </Link>
                       </div>
-                      {item.expense.notes ? (
-                        <div className="mt-2 text-sm text-[var(--muted)]">{item.expense.notes}</div>
-                      ) : null}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <EmptyTableRow colSpan={6} text="Todavia no hay pagos registrados con los filtros actuales." />
+              )}
+            </FinanceTableCard>
+
+            <FinanceTableCard
+              columns={["Categoria", "Orden", "Notas", "Monto", "Fecha"]}
+              description="Gastos operativos en formato tabla."
+              title="Gastos"
+            >
+              {data.expenses.length ? (
+                data.expenses.map((item) => (
+                  <tr className="border-t border-[var(--line)] align-top" key={item.expense.id}>
+                    <td className="px-5 py-4">
+                      <Badge variant="primary">{getExpenseCategoryLabel(item.expense.category)}</Badge>
+                    </td>
+                    <td className="px-5 py-4">{item.workOrder?.title || "Gasto general del taller"}</td>
+                    <td className="px-5 py-4">
+                      <div>{item.expense.notes || "Sin notas"}</div>
                       {item.assets.length ? (
-                        <div className="mt-2 flex flex-wrap gap-3">
+                        <div className="mt-2 flex flex-wrap gap-2">
                           {item.assets.map((asset, index) => (
                             <a
-                              key={asset.id}
-                              className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                              className="text-xs font-medium text-[var(--primary-strong)] hover:underline"
                               href={asset.asset_url}
+                              key={asset.id}
                               rel="noreferrer"
                               target="_blank"
                             >
@@ -286,25 +228,272 @@ export default async function FinancesPage({ searchParams }: FinancesPageProps) 
                           ))}
                         </div>
                       ) : null}
+                    </td>
+                    <td className="px-5 py-4 font-semibold">{formatCurrencyDisplay(item.expense.amount, workshop.preferred_currency)}</td>
+                    <td className="px-5 py-4">{new Date(item.expense.spent_at).toLocaleDateString("es-VE")}</td>
+                  </tr>
+                ))
+              ) : (
+                <EmptyTableRow colSpan={5} text="Todavia no hay gastos registrados con los filtros actuales." />
+              )}
+            </FinanceTableCard>
+          </div>
+        </div>
+      ) : (
+        <>
+          <Card className="bg-white/86">
+            <CardHeader>
+              <CardTitle>Saldos pendientes por orden</CardTitle>
+              <CardDescription>
+                Lo justo para saber que falta cobrar y cuales ordenes ya estan comprometidas por fecha.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {data.pendingBalances.length ? (
+                data.pendingBalances.slice(0, 8).map((item) => (
+                  <div
+                    key={item.workOrder.id}
+                    className="flex flex-col gap-4 rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 xl:flex-row xl:items-center xl:justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {item.isOverdue ? <Badge variant="primary">Vencida</Badge> : <Badge>Por cobrar</Badge>}
+                        {item.workOrder.code ? <Badge>{item.workOrder.code}</Badge> : null}
+                      </div>
+                      <div>
+                        <Link
+                          className="font-semibold hover:text-[var(--primary-strong)]"
+                          href={`/app/work-orders/${item.workOrder.id}` as Route}
+                        >
+                          {item.workOrder.title}
+                        </Link>
+                        <div className="mt-1 text-sm text-[var(--muted)]">
+                          {item.client?.full_name || "Cliente pendiente"} -{" "}
+                          {item.workOrder.vehicle_label || "Vehiculo pendiente"}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-left sm:text-right">
-                      <div className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
-                        {formatCurrencyDisplay(item.expense.amount, workshop.preferred_currency)}
-                      </div>
-                      <div className="mt-1 text-sm text-[var(--muted)]">
-                        {new Date(item.expense.spent_at).toLocaleDateString("es-VE")}
-                      </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[460px]">
+                      <MetricBlock
+                        label="Cobrado"
+                        value={formatCurrencyDisplay(item.collectedAmount, workshop.preferred_currency)}
+                      />
+                      <MetricBlock
+                        label="Pendiente"
+                        value={formatCurrencyDisplay(item.pendingBalance, workshop.preferred_currency)}
+                      />
+                      <MetricBlock
+                        label="Promesa"
+                        value={item.workOrder.promised_date || "Sin fecha"}
+                      />
                     </div>
                   </div>
+                ))
+              ) : (
+                <EmptyMessage text="No hay saldos pendientes con los filtros actuales." />
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card className="bg-white/86">
+              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>Historial de pagos</CardTitle>
+                  <CardDescription>
+                    Ultimos movimientos de cobro con estado y metodo visibles.
+                  </CardDescription>
                 </div>
-              ))
-            ) : (
-              <EmptyMessage text="Todavia no hay gastos registrados con los filtros actuales." />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                <Button asChild variant="outline">
+                  <Link href={getFinancePaymentNewHref()}>
+                    <ArrowUpRight className="size-4" />
+                    Nuevo pago
+                  </Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {data.paymentHistory.length ? (
+                  data.paymentHistory.slice(0, 10).map((item) => (
+                    <div
+                      key={item.payment.id}
+                      className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <PaymentStatusBadge status={item.payment.status} />
+                        <Badge>{getPaymentMethodLabel(item.payment.method)}</Badge>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="font-semibold">
+                            {item.client?.full_name || "Cliente sin nombre"}
+                          </div>
+                          <div className="mt-1 text-sm text-[var(--muted)]">
+                            {item.workOrder ? item.workOrder.title : "Pago sin orden vinculada"}
+                          </div>
+                          {item.payment.notes ? (
+                            <div className="mt-2 text-sm text-[var(--muted)]">{item.payment.notes}</div>
+                          ) : null}
+                          {item.payment.proof_url ? (
+                            <div className="mt-2 flex flex-wrap gap-3">
+                              <a
+                                className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                                href={item.payment.proof_url}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                Ver comprobante
+                              </a>
+                              <Link
+                                className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                                href={getPaymentReceiptHref(item.payment.id)}
+                              >
+                                Recibo PDF
+                              </Link>
+                            </div>
+                          ) : (
+                            <Link
+                              className="mt-2 inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                              href={getPaymentReceiptHref(item.payment.id)}
+                            >
+                              Recibo PDF
+                            </Link>
+                          )}
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <div className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
+                            {formatCurrencyDisplay(item.payment.amount, workshop.preferred_currency)}
+                          </div>
+                          <div className="mt-1 text-sm text-[var(--muted)]">
+                            {new Date(item.payment.paid_at).toLocaleDateString("es-VE")}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyMessage text="Todavia no hay pagos registrados con los filtros actuales." />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/86">
+              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>Gastos</CardTitle>
+                  <CardDescription>
+                    Salidas del taller agrupadas de forma simple y legible.
+                  </CardDescription>
+                </div>
+                <Button asChild variant="outline">
+                  <Link href={getFinanceExpenseNewHref()}>
+                    <ArrowDownRight className="size-4" />
+                    Nuevo gasto
+                  </Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {data.expenses.length ? (
+                  data.expenses.slice(0, 10).map((item) => (
+                    <div
+                      key={item.expense.id}
+                      className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="primary">{getExpenseCategoryLabel(item.expense.category)}</Badge>
+                        {item.workOrder ? <Badge>{item.workOrder.code || "Orden"}</Badge> : null}
+                      </div>
+                      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="font-semibold">
+                            {item.workOrder ? item.workOrder.title : "Gasto general del taller"}
+                          </div>
+                          {item.expense.notes ? (
+                            <div className="mt-2 text-sm text-[var(--muted)]">{item.expense.notes}</div>
+                          ) : null}
+                          {item.assets.length ? (
+                            <div className="mt-2 flex flex-wrap gap-3">
+                              {item.assets.map((asset, index) => (
+                                <a
+                                  key={asset.id}
+                                  className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                                  href={asset.asset_url}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  Soporte {index + 1}
+                                </a>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <div className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
+                            {formatCurrencyDisplay(item.expense.amount, workshop.preferred_currency)}
+                          </div>
+                          <div className="mt-1 text-sm text-[var(--muted)]">
+                            {new Date(item.expense.spent_at).toLocaleDateString("es-VE")}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyMessage text="Todavia no hay gastos registrados con los filtros actuales." />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function FinanceTableCard({
+  title,
+  description,
+  columns,
+  children,
+}: {
+  title: string;
+  description: string;
+  columns: string[];
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="bg-white/88">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead className="bg-[rgba(21,28,35,0.04)] text-left text-[var(--muted)]">
+              <tr>
+                {columns.map((column) => (
+                  <th className="px-5 py-4 font-semibold" key={column}>
+                    {column}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>{children}</tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyTableRow({ colSpan, text }: { colSpan: number; text: string }) {
+  return (
+    <tr className="border-t border-[var(--line)]">
+      <td className="px-5 py-8 text-sm text-[var(--muted)]" colSpan={colSpan}>
+        {text}
+      </td>
+    </tr>
   );
 }
 

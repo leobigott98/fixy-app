@@ -29,6 +29,8 @@ type DashboardStats = {
   pendingQuotes: number;
   collectedThisPeriod: number;
   pendingServices: number;
+  completedOrders: number;
+  averageTicket: number;
   recentOrders: Array<{
     id: string;
     title: string;
@@ -37,6 +39,23 @@ type DashboardStats = {
     promisedDate: string | null;
     totalAmount: number;
   }>;
+  analytics: {
+    workOrdersByStatus: Array<{
+      label: string;
+      value: number;
+      color: string;
+    }>;
+    quotesByStatus: Array<{
+      label: string;
+      value: number;
+      color: string;
+    }>;
+    cashflowTrend: Array<{
+      label: string;
+      collected: number;
+      expenses: number;
+    }>;
+  };
 };
 
 type RecentOrderRow = {
@@ -50,7 +69,87 @@ type RecentOrderRow = {
 
 type PaymentRow = {
   amount: number | string | null;
+  status?: string | null;
+  paid_at?: string | null;
 };
+
+type ExpenseRow = {
+  amount: number | string | null;
+  spent_at: string | null;
+};
+
+type WorkOrderAnalyticsRow = {
+  id: string;
+  status: string;
+  created_at: string;
+  total_amount: number | string | null;
+};
+
+type QuoteAnalyticsRow = {
+  id: string;
+  status: string;
+  created_at: string;
+  total_amount: number | string | null;
+};
+
+function getMonthSeries(months: number) {
+  const now = new Date();
+
+  return Array.from({ length: months }).map((_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (months - index - 1), 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+    return {
+      key,
+      label: date.toLocaleDateString("es-VE", { month: "short" }),
+    };
+  });
+}
+
+function getMonthKey(dateValue: string | null | undefined) {
+  if (!dateValue) {
+    return null;
+  }
+
+  const date = new Date(dateValue);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getWorkOrderStatusColor(status: string) {
+  switch (status) {
+    case "en_reparacion":
+      return "#f97316";
+    case "diagnostico_pendiente":
+      return "#0f766e";
+    case "listo_para_entrega":
+      return "#15803d";
+    case "presupuesto_pendiente":
+      return "#334155";
+    case "completada":
+      return "#1d4ed8";
+    case "cancelada":
+      return "#b42318";
+    default:
+      return "#94a3b8";
+  }
+}
+
+function getQuoteStatusColor(status: string) {
+  switch (status) {
+    case "draft":
+      return "#334155";
+    case "sent":
+      return "#0f766e";
+    case "approved":
+      return "#15803d";
+    case "rejected":
+      return "#b42318";
+    case "expired":
+      return "#f97316";
+    default:
+      return "#94a3b8";
+  }
+}
 
 function formatDashboardStatus(status: string) {
   switch (status) {
@@ -145,38 +244,23 @@ export async function upsertCurrentWorkshop(input: WorkshopProfileInput) {
 
 export async function getDashboardStats(workshopId: string): Promise<DashboardStats> {
   const supabase = await createSupabaseDataClient();
+  const monthSeries = getMonthSeries(6);
 
   const [
-    activeWorkOrdersResult,
-    pendingQuotesResult,
-    pendingServicesResult,
+    workOrdersResult,
+    quotesResult,
     recentOrdersResult,
     paymentsResult,
+    expensesResult,
   ] = await Promise.all([
     supabase
       .from("work_orders")
-      .select("*", { count: "exact", head: true })
-      .eq("workshop_id", workshopId)
-      .in("status", [
-        "presupuesto_pendiente",
-        "diagnostico_pendiente",
-        "en_reparacion",
-        "listo_para_entrega",
-      ]),
+      .select("id,status,created_at,total_amount")
+      .eq("workshop_id", workshopId),
     supabase
       .from("quotes")
-      .select("*", { count: "exact", head: true })
-      .eq("workshop_id", workshopId)
-      .in("status", ["draft", "sent"]),
-    supabase
-      .from("work_orders")
-      .select("*", { count: "exact", head: true })
-      .eq("workshop_id", workshopId)
-      .in("status", [
-        "presupuesto_pendiente",
-        "diagnostico_pendiente",
-        "en_reparacion",
-      ]),
+      .select("id,status,created_at,total_amount")
+      .eq("workshop_id", workshopId),
     supabase
       .from("work_orders")
       .select("id,title,status,vehicle_label,promised_date,total_amount")
@@ -185,18 +269,20 @@ export async function getDashboardStats(workshopId: string): Promise<DashboardSt
       .limit(5),
     supabase
       .from("payments")
-      .select("amount")
-      .eq("workshop_id", workshopId)
-      .in("status", ["paid", "partial"])
-      .gte("paid_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+      .select("amount,status,paid_at")
+      .eq("workshop_id", workshopId),
+    supabase
+      .from("expenses")
+      .select("amount,spent_at")
+      .eq("workshop_id", workshopId),
   ]);
 
   const results = [
-    activeWorkOrdersResult.error,
-    pendingQuotesResult.error,
-    pendingServicesResult.error,
+    workOrdersResult.error,
+    quotesResult.error,
     recentOrdersResult.error,
     paymentsResult.error,
+    expensesResult.error,
   ];
 
   const nonMissingError = results.find((error) => error && !isMissingRelationError(error));
@@ -205,15 +291,89 @@ export async function getDashboardStats(workshopId: string): Promise<DashboardSt
     throw nonMissingError;
   }
 
+  const workOrders = (workOrdersResult.data as WorkOrderAnalyticsRow[] | null) ?? [];
+  const quotes = (quotesResult.data as QuoteAnalyticsRow[] | null) ?? [];
+  const payments = (paymentsResult.data as PaymentRow[] | null) ?? [];
+  const expenses = (expensesResult.data as ExpenseRow[] | null) ?? [];
+
+  const activeWorkOrders = workOrders.filter((workOrder) =>
+    ["presupuesto_pendiente", "diagnostico_pendiente", "en_reparacion", "listo_para_entrega"].includes(
+      workOrder.status,
+    ),
+  ).length;
+
+  const pendingQuotes = quotes.filter((quote) => ["draft", "sent"].includes(quote.status)).length;
+  const pendingServices = workOrders.filter((workOrder) =>
+    ["presupuesto_pendiente", "diagnostico_pendiente", "en_reparacion"].includes(workOrder.status),
+  ).length;
+
+  const collectedPayments = payments.filter((payment) =>
+    ["paid", "partial"].includes(payment.status ?? ""),
+  );
+
+  const currentMonthKey = getMonthKey(new Date().toISOString());
+  const collectedThisPeriod = collectedPayments
+    .filter((payment) => getMonthKey(payment.paid_at) === currentMonthKey)
+    .reduce((total, payment) => total + Number(payment.amount ?? 0), 0);
+
+  const completedOrders = workOrders.filter((workOrder) => workOrder.status === "completada").length;
+  const averageTicket = completedOrders
+    ? workOrders
+        .filter((workOrder) => workOrder.status === "completada")
+        .reduce((total, workOrder) => total + Number(workOrder.total_amount ?? 0), 0) / completedOrders
+    : 0;
+
+  const workOrdersByStatus = [
+    "presupuesto_pendiente",
+    "diagnostico_pendiente",
+    "en_reparacion",
+    "listo_para_entrega",
+    "completada",
+    "cancelada",
+  ].map((status) => ({
+    label: formatDashboardStatus(status),
+    value: workOrders.filter((workOrder) => workOrder.status === status).length,
+    color: getWorkOrderStatusColor(status),
+  }));
+
+  const quotesByStatus = ["draft", "sent", "approved", "rejected", "expired"].map((status) => ({
+    label:
+      status === "draft"
+        ? "Borrador"
+        : status === "sent"
+          ? "Enviado"
+          : status === "approved"
+            ? "Aprobado"
+            : status === "rejected"
+              ? "Rechazado"
+              : "Vencido",
+    value: quotes.filter((quote) => quote.status === status).length,
+    color: getQuoteStatusColor(status),
+  }));
+
+  const cashflowTrend = monthSeries.map((month) => ({
+    label: month.label,
+    collected: Number(
+      collectedPayments
+        .filter((payment) => getMonthKey(payment.paid_at) === month.key)
+        .reduce((total, payment) => total + Number(payment.amount ?? 0), 0)
+        .toFixed(2),
+    ),
+    expenses: Number(
+      expenses
+        .filter((expense) => getMonthKey(expense.spent_at) === month.key)
+        .reduce((total, expense) => total + Number(expense.amount ?? 0), 0)
+        .toFixed(2),
+    ),
+  }));
+
   return {
-    activeWorkOrders: activeWorkOrdersResult.count ?? 0,
-    pendingQuotes: pendingQuotesResult.count ?? 0,
-    pendingServices: pendingServicesResult.count ?? 0,
-    collectedThisPeriod:
-      ((paymentsResult.data as PaymentRow[] | null)?.reduce(
-        (total, payment) => total + Number(payment.amount ?? 0),
-        0,
-      ) ?? 0),
+    activeWorkOrders,
+    pendingQuotes,
+    pendingServices,
+    collectedThisPeriod,
+    completedOrders,
+    averageTicket: Number(averageTicket.toFixed(2)),
     recentOrders:
       ((recentOrdersResult.data as RecentOrderRow[] | null)?.map((order) => ({
         id: order.id,
@@ -223,5 +383,10 @@ export async function getDashboardStats(workshopId: string): Promise<DashboardSt
         promisedDate: order.promised_date,
         totalAmount: Number(order.total_amount ?? 0),
       })) ?? []),
+    analytics: {
+      workOrdersByStatus,
+      quotesByStatus,
+      cashflowTrend,
+    },
   };
 }
