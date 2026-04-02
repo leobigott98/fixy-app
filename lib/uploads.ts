@@ -19,6 +19,12 @@ export const uploadScopes = {
     maxSizeInBytes: 10 * 1024 * 1024,
     mimeTypes: ["image/jpeg", "image/webp", "image/png", "application/pdf"],
   },
+  mechanic_photo: {
+    folder: "mechanics/photos",
+    maxFiles: 1,
+    maxSizeInBytes: 8 * 1024 * 1024,
+    mimeTypes: ["image/jpeg", "image/webp", "image/png"],
+  },
   vehicle_photo: {
     folder: "vehicles/photos",
     maxFiles: 12,

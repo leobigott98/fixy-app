@@ -2,6 +2,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import { getMechanicAssignmentOptions, type MechanicRecord } from "@/lib/data/mechanics";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
 import type { QuoteItemRecord, QuoteRecord } from "@/lib/data/quotes";
@@ -26,6 +27,7 @@ export type WorkOrderRecord = {
   promised_date: string | null;
   total_amount: number;
   bay_slot: number | null;
+  assigned_mechanic_id: string | null;
   assigned_mechanic_name: string | null;
   notes: string | null;
   created_at: string;
@@ -93,10 +95,13 @@ type PaymentLite = {
   status: string | null;
 };
 
+type MechanicLite = Pick<MechanicRecord, "id" | "full_name" | "role" | "photo_url" | "is_active">;
+
 type WorkOrderRowWithRelations = WorkOrderRecord & {
   clients: ClientLite | ClientLite[] | null;
   vehicles: VehicleLite | VehicleLite[] | null;
   quotes: QuoteLite | QuoteLite[] | null;
+  mechanics: MechanicLite | MechanicLite[] | null;
 };
 
 export type WorkOrderListItem = WorkOrderRecord & {
@@ -144,6 +149,11 @@ export type WorkOrderFormOptions = {
     clientId: string | null;
     vehicleId: string | null;
     title: string;
+  }>;
+  mechanics: Array<{
+    id: string;
+    label: string;
+    fullName: string;
   }>;
 };
 
@@ -220,7 +230,7 @@ async function validateWorkOrderRelations(input: WorkOrderInput) {
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
 
-  const [vehicleResult, quoteResult] = await Promise.all([
+  const [vehicleResult, quoteResult, mechanicResult] = await Promise.all([
     supabase
       .from("vehicles")
       .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
@@ -235,10 +245,20 @@ async function validateWorkOrderRelations(input: WorkOrderInput) {
           .eq("id", input.quoteId)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    input.assignedMechanicId
+      ? supabase
+          .from("mechanics")
+          .select("id,full_name,role,is_active,photo_url")
+          .eq("workshop_id", workshop.id)
+          .eq("id", input.assignedMechanicId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
-  if (vehicleResult.error) {
-    throw vehicleResult.error;
+  const relationError = [vehicleResult.error, quoteResult.error, mechanicResult.error].find(Boolean);
+
+  if (relationError) {
+    throw relationError;
   }
 
   const vehicle = (vehicleResult.data as VehicleLite | null) ?? null;
@@ -259,10 +279,21 @@ async function validateWorkOrderRelations(input: WorkOrderInput) {
     }
   }
 
+  const mechanic = (mechanicResult.data as MechanicLite | null) ?? null;
+
+  if (input.assignedMechanicId && !mechanic) {
+    throw new Error("Selecciona un integrante valido.");
+  }
+
+  if (mechanic && !mechanic.is_active) {
+    throw new Error("El integrante seleccionado esta inactivo.");
+  }
+
   return {
     workshop,
     vehicle,
     quote,
+    mechanic,
   };
 }
 
@@ -383,7 +414,7 @@ export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
 
-  const [clientsResult, vehiclesResult, quotesResult] = await Promise.all([
+  const [clientsResult, vehiclesResult, quotesResult, mechanics] = await Promise.all([
     supabase.from("clients").select("id,full_name").eq("workshop_id", workshop.id).order("full_name"),
     supabase
       .from("vehicles")
@@ -396,6 +427,7 @@ export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
       .eq("workshop_id", workshop.id)
       .eq("status", "approved")
       .order("approved_at", { ascending: false }),
+    getMechanicAssignmentOptions(),
   ]);
 
   const nonMissingError = [clientsResult.error, vehiclesResult.error, quotesResult.error].find(
@@ -429,6 +461,7 @@ export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
       vehicleId: quote.vehicle_id,
       title: quote.title,
     }))),
+    mechanics,
   };
 }
 
@@ -439,7 +472,7 @@ export async function getWorkOrdersList(search?: string): Promise<WorkOrderListI
 
   const { data, error } = await supabase
     .from("work_orders")
-    .select("*, clients(id,full_name,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year), quotes(id,title,status,total_amount)")
+    .select("*, clients(id,full_name,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year), quotes(id,title,status,total_amount), mechanics(id,full_name,role,photo_url,is_active)")
     .eq("workshop_id", workshop.id)
     .order("updated_at", { ascending: false });
 
@@ -456,7 +489,8 @@ export async function getWorkOrdersList(search?: string): Promise<WorkOrderListI
     client: toSingleRelation(row.clients),
     vehicle: toSingleRelation(row.vehicles),
     quote: toSingleRelation(row.quotes),
-    assignedMechanicName: row.assigned_mechanic_name,
+    assignedMechanicName:
+      toSingleRelation(row.mechanics)?.full_name ?? row.assigned_mechanic_name,
   }));
 
   const filteredRows = rows.filter((row) => {
@@ -556,7 +590,7 @@ export async function getWorkOrderDetail(workOrderId: string): Promise<WorkOrder
 
   const { data: workOrderData, error: workOrderError } = await supabase
     .from("work_orders")
-    .select("*, clients(id,full_name,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year), quotes(id,title,status,total_amount)")
+    .select("*, clients(id,full_name,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year), quotes(id,title,status,total_amount), mechanics(id,full_name,role,photo_url,is_active)")
     .eq("workshop_id", workshop.id)
     .eq("id", workOrderId)
     .maybeSingle();
@@ -639,7 +673,7 @@ export async function getWorkOrderForEdit(workOrderId: string) {
 
 export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrderId?: string) {
   const input = normalizeWorkOrderInput(inputValues);
-  const { workshop, vehicle, quote } = await validateWorkOrderRelations(input);
+  const { workshop, vehicle, quote, mechanic } = await validateWorkOrderRelations(input);
   const supabase = await createSupabaseDataClient();
 
   let existingWorkOrder: Pick<WorkOrderRecord, "status" | "code"> | null = null;
@@ -668,7 +702,8 @@ export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrde
     status: input.status,
     promised_date: input.promisedDate ?? null,
     total_amount: input.total,
-    assigned_mechanic_name: input.assignedMechanicName || null,
+    assigned_mechanic_id: mechanic?.id ?? null,
+    assigned_mechanic_name: mechanic?.full_name ?? null,
     notes: input.notes || null,
   };
 
@@ -812,6 +847,7 @@ export async function createWorkOrderFromApprovedQuote(quoteId: string) {
     status: "diagnostico_pendiente" as const,
     promised_date: null,
     total_amount: Number(quote.total_amount ?? 0),
+    assigned_mechanic_id: null,
     assigned_mechanic_name: null,
     notes: quote.notes ?? null,
   };
@@ -897,7 +933,7 @@ export function buildWorkOrderFormDefaults(
     quoteId: source?.workOrder?.quote_id ?? source?.selectedQuoteId ?? "",
     title: source?.workOrder?.title ?? "",
     status: source?.workOrder?.status ?? "diagnostico_pendiente",
-    assignedMechanicName: source?.workOrder?.assigned_mechanic_name ?? "",
+    assignedMechanicId: source?.workOrder?.assigned_mechanic_id ?? "",
     promisedDate: source?.workOrder?.promised_date ?? "",
     notes: source?.workOrder?.notes ?? "",
     referencePhotoUrls: source?.referencePhotos?.map((photo) => photo.photo_url) ?? [],

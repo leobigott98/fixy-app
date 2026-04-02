@@ -25,7 +25,7 @@ export const workOrderFormSchema = z.object({
   quoteId: z.string().optional(),
   title: z.string().trim().min(2, "Define un titulo corto para la orden."),
   status: z.enum(workOrderStatusValues, "Selecciona un estado."),
-  assignedMechanicName: z.string().trim(),
+  assignedMechanicId: z.string(),
   promisedDate: z.string().trim(),
   notes: z.string().trim(),
   referencePhotoUrls: z.array(z.string().url("Sube referencias validas.")).max(12, "Maximo 12 fotos."),
@@ -57,7 +57,7 @@ export type WorkOrderInput = {
     | "listo_para_entrega"
     | "completada"
     | "cancelada";
-  assignedMechanicName: string;
+  assignedMechanicId?: string;
   promisedDate?: string;
   notes: string;
   referencePhotoUrls: string[];
@@ -104,7 +104,7 @@ export function normalizeWorkOrderInput(values: WorkOrderFormValues): WorkOrderI
     quoteId: values.quoteId || undefined,
     title: values.title,
     status: values.status,
-    assignedMechanicName: values.assignedMechanicName,
+    assignedMechanicId: values.assignedMechanicId || undefined,
     promisedDate: values.promisedDate || undefined,
     notes: values.notes,
     referencePhotoUrls: values.referencePhotoUrls,

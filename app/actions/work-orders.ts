@@ -27,6 +27,7 @@ function revalidateWorkOrderPaths(workOrderId: string) {
   revalidatePath(`/app/work-orders/${workOrderId}`);
   revalidatePath("/app/dashboard");
   revalidatePath("/app/quotes");
+  revalidatePath("/app/mechanics");
 }
 
 export async function saveWorkOrderAction(

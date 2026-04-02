@@ -27,6 +27,7 @@ type WorkOrderFormProps = {
     clients: Array<{ id: string; fullName: string }>;
     vehicles: Array<{ id: string; clientId: string | null; label: string }>;
     approvedQuotes: Array<{ id: string; clientId: string | null; vehicleId: string | null; title: string }>;
+    mechanics: Array<{ id: string; label: string; fullName: string }>;
   };
   preferredCurrency: "USD" | "VES" | "USD_VES";
   workOrderId?: string;
@@ -87,6 +88,7 @@ export function WorkOrderForm({
   const serviceItems = useWatch({ control, name: "serviceItems" }) ?? [];
   const partItems = useWatch({ control, name: "partItems" }) ?? [];
   const quoteId = useWatch({ control, name: "quoteId" });
+  const assignedMechanicId = useWatch({ control, name: "assignedMechanicId" });
 
   const vehicleOptions = useMemo(
     () => options.vehicles.filter((vehicle) => !clientId || vehicle.clientId === clientId),
@@ -101,6 +103,11 @@ export function WorkOrderForm({
           (!vehicleId || quote.vehicleId === vehicleId),
       ),
     [clientId, vehicleId, options.approvedQuotes],
+  );
+
+  const selectedMechanic = useMemo(
+    () => options.mechanics.find((mechanic) => mechanic.id === assignedMechanicId) ?? null,
+    [assignedMechanicId, options.mechanics],
   );
 
   useEffect(() => {
@@ -257,9 +264,18 @@ export function WorkOrderForm({
                 input={<Input placeholder="Ej. Reparacion tren delantero" {...register("title")} />}
               />
               <Field
-                label="Asignado a"
-                error={errors.assignedMechanicName?.message}
-                input={<Input placeholder="Ej. Carlos / Equipo A" {...register("assignedMechanicName")} />}
+                label="Responsable"
+                error={errors.assignedMechanicId?.message}
+                input={
+                  <Select {...register("assignedMechanicId")}>
+                    <option value="">Sin asignar</option>
+                    {options.mechanics.map((mechanic) => (
+                      <option key={mechanic.id} value={mechanic.id}>
+                        {mechanic.label}
+                      </option>
+                    ))}
+                  </Select>
+                }
               />
               <Field
                 label="Promesa de entrega"
@@ -347,6 +363,7 @@ export function WorkOrderForm({
           <CardContent className="space-y-3">
             <SummaryRow label="Servicios" value={String(serviceItems.length)} />
             <SummaryRow label="Repuestos" value={String(partItems.length)} />
+            <SummaryRow label="Responsable" value={selectedMechanic?.fullName || "Sin asignar"} />
             <SummaryRow label="Referencias" value={String(referencePhotoUrls.length)} />
             <SummaryRow label="Promesa" value={useWatch({ control, name: "promisedDate" }) || "Sin fecha"} />
             <div className="rounded-2xl bg-white/10 p-4">
