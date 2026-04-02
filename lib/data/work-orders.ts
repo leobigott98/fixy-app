@@ -2,6 +2,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import { getInventoryPartOptions, syncWorkOrderInventoryUsage } from "@/lib/data/inventory";
 import { getMechanicAssignmentOptions, type MechanicRecord } from "@/lib/data/mechanics";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
@@ -47,7 +48,9 @@ export type WorkOrderServiceRecord = {
   created_at: string;
 };
 
-export type WorkOrderPartRecord = WorkOrderServiceRecord;
+export type WorkOrderPartRecord = WorkOrderServiceRecord & {
+  inventory_item_id: string | null;
+};
 
 export type WorkOrderReferencePhotoRecord = {
   id: string;
@@ -156,6 +159,13 @@ export type WorkOrderFormOptions = {
     label: string;
     fullName: string;
   }>;
+  inventoryItems: Array<{
+    id: string;
+    label: string;
+    name: string;
+    stockQuantity: number;
+    referenceSalePrice: number;
+  }>;
 };
 
 function toSingleRelation<T>(value: T | T[] | null): T | null {
@@ -236,6 +246,26 @@ function normalizeWorkOrderRecord(record: WorkOrderRecord) {
     ...record,
     total_amount: Number(record.total_amount ?? 0),
   };
+}
+
+function aggregateInventoryUsage(
+  items: Array<
+    { inventoryItemId?: string; quantity: number } | { inventory_item_id: string | null; quantity: number }
+  >,
+) {
+  return items.reduce<Record<string, number>>((acc, item) => {
+    const inventoryItemId =
+      "inventoryItemId" in item
+        ? item.inventoryItemId
+        : (item as { inventory_item_id: string | null }).inventory_item_id;
+
+    if (!inventoryItemId) {
+      return acc;
+    }
+
+    acc[inventoryItemId] = Number(((acc[inventoryItemId] ?? 0) + item.quantity).toFixed(2));
+    return acc;
+  }, {});
 }
 
 async function validateWorkOrderRelations(input: WorkOrderInput) {
@@ -374,6 +404,7 @@ async function replaceWorkOrderItems(
       parts.map((item) => ({
         work_order_id: workOrderId,
         workshop_id: workshopId,
+        inventory_item_id: item.inventoryItemId ?? null,
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unitPrice,
@@ -426,7 +457,7 @@ export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
 
-  const [clientsResult, vehiclesResult, quotesResult, mechanics] = await Promise.all([
+  const [clientsResult, vehiclesResult, quotesResult, mechanics, inventoryItems] = await Promise.all([
     supabase.from("clients").select("id,full_name").eq("workshop_id", workshop.id).order("full_name"),
     supabase
       .from("vehicles")
@@ -440,6 +471,7 @@ export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
       .eq("status", "approved")
       .order("approved_at", { ascending: false }),
     getMechanicAssignmentOptions(),
+    getInventoryPartOptions(),
   ]);
 
   const nonMissingError = [clientsResult.error, vehiclesResult.error, quotesResult.error].find(
@@ -474,6 +506,13 @@ export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
       title: quote.title,
     }))),
     mechanics,
+    inventoryItems: inventoryItems.map((item) => ({
+      id: item.id,
+      label: item.label,
+      name: item.name,
+      stockQuantity: item.stockQuantity,
+      referenceSalePrice: item.referenceSalePrice,
+    })),
   };
 }
 
@@ -689,16 +728,40 @@ export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrde
   const supabase = await createSupabaseDataClient();
 
   let existingWorkOrder: Pick<WorkOrderRecord, "status" | "code" | "completed_at"> | null = null;
+  let previousPartUsage: Record<string, number> = {};
 
   if (workOrderId) {
-    const { data } = await supabase
+    const [{ data: existingData }, { data: existingPartsData, error: existingPartsError }] = await Promise.all([
+      supabase
       .from("work_orders")
       .select("status,code,completed_at")
       .eq("workshop_id", workshop.id)
       .eq("id", workOrderId)
-      .maybeSingle();
+        .maybeSingle(),
+      supabase
+        .from("work_order_parts")
+        .select("inventory_item_id,quantity")
+        .eq("workshop_id", workshop.id)
+        .eq("work_order_id", workOrderId),
+    ]);
 
-    existingWorkOrder = (data as Pick<WorkOrderRecord, "status" | "code" | "completed_at"> | null) ?? null;
+    if (existingPartsError && !isMissingRelationError(existingPartsError)) {
+      throw existingPartsError;
+    }
+
+    existingWorkOrder = (existingData as Pick<WorkOrderRecord, "status" | "code" | "completed_at"> | null) ?? null;
+    previousPartUsage =
+      existingWorkOrder?.status === "completada"
+        ? aggregateInventoryUsage(
+            (((existingPartsData as Array<{
+              inventory_item_id: string | null;
+              quantity: number | string | null;
+            }> | null) ?? []).map((item) => ({
+              inventory_item_id: item.inventory_item_id,
+              quantity: Number(item.quantity ?? 0),
+            }))),
+          )
+        : {};
   }
 
   const payload = {
@@ -733,6 +796,12 @@ export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrde
   const workOrder = normalizeWorkOrderRecord(data as WorkOrderRecord);
   await replaceWorkOrderItems(workOrder.id, workshop.id, input.serviceItems, input.partItems);
   await replaceReferencePhotos(workOrder.id, workshop.id, input.referencePhotoUrls);
+  await syncWorkOrderInventoryUsage({
+    workshopId: workshop.id,
+    workOrderId: workOrder.id,
+    previousUsage: previousPartUsage,
+    nextUsage: input.status === "completada" ? aggregateInventoryUsage(input.partItems) : {},
+  });
 
   if (!workOrderId) {
     await insertStatusHistory(workOrder.id, workshop.id, null, input.status, "Orden creada");
@@ -747,15 +816,26 @@ export async function updateWorkOrderStatus(workOrderId: string, status: WorkOrd
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
 
-  const { data: existingData, error: existingError } = await supabase
-    .from("work_orders")
-    .select("*")
-    .eq("workshop_id", workshop.id)
-    .eq("id", workOrderId)
-    .maybeSingle();
+  const [{ data: existingData, error: existingError }, { data: existingPartsData, error: existingPartsError }] = await Promise.all([
+    supabase
+      .from("work_orders")
+      .select("*")
+      .eq("workshop_id", workshop.id)
+      .eq("id", workOrderId)
+      .maybeSingle(),
+    supabase
+      .from("work_order_parts")
+      .select("inventory_item_id,quantity")
+      .eq("workshop_id", workshop.id)
+      .eq("work_order_id", workOrderId),
+  ]);
 
   if (existingError) {
     throw existingError;
+  }
+
+  if (existingPartsError && !isMissingRelationError(existingPartsError)) {
+    throw existingPartsError;
   }
 
   const existing = existingData as WorkOrderRecord | null;
@@ -782,6 +862,23 @@ export async function updateWorkOrderStatus(workOrderId: string, status: WorkOrd
   if (error) {
     throw error;
   }
+
+  const partUsage = aggregateInventoryUsage(
+    (((existingPartsData as Array<{
+      inventory_item_id: string | null;
+      quantity: number | string | null;
+    }> | null) ?? []).map((item) => ({
+      inventory_item_id: item.inventory_item_id,
+      quantity: Number(item.quantity ?? 0),
+    }))),
+  );
+
+  await syncWorkOrderInventoryUsage({
+    workshopId: workshop.id,
+    workOrderId,
+    previousUsage: existing.status === "completada" ? partUsage : {},
+    nextUsage: status === "completada" ? partUsage : {},
+  });
 
   await insertStatusHistory(workOrderId, workshop.id, existing.status, status, "Cambio manual de etapa");
 
@@ -907,6 +1004,7 @@ export async function createWorkOrderFromApprovedQuote(quoteId: string) {
       parts.map((item) => ({
         work_order_id: workOrder.id,
         workshop_id: workshop.id,
+        inventory_item_id: item.inventory_item_id ?? null,
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
@@ -957,6 +1055,7 @@ export function buildWorkOrderFormDefaults(
     serviceItems:
       source?.services?.map((item) => ({
         rowId: item.id,
+        inventoryItemId: "",
         itemType: "service",
         description: item.description,
         quantity: String(item.quantity),
@@ -964,6 +1063,7 @@ export function buildWorkOrderFormDefaults(
       })) ?? [
         {
           rowId: crypto.randomUUID(),
+          inventoryItemId: "",
           itemType: "service",
           description: "",
           quantity: "1",
@@ -973,6 +1073,7 @@ export function buildWorkOrderFormDefaults(
     partItems:
       source?.parts?.map((item) => ({
         rowId: item.id,
+        inventoryItemId: item.inventory_item_id ?? "",
         itemType: "part",
         description: item.description,
         quantity: String(item.quantity),

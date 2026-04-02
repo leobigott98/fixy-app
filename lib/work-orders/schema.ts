@@ -4,6 +4,7 @@ import { workOrderItemTypeOptions, workOrderStatusValues } from "@/lib/work-orde
 
 export const workOrderItemFormSchema = z.object({
   rowId: z.string(),
+  inventoryItemId: z.string(),
   itemType: z.enum(
     workOrderItemTypeOptions.map((option) => option.value) as ["service", "part"],
     "Selecciona el tipo de item.",
@@ -38,6 +39,7 @@ export type WorkOrderItemFormValues = z.infer<typeof workOrderItemFormSchema>;
 
 export type WorkOrderItemInput = {
   itemType: "service" | "part";
+  inventoryItemId?: string;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -76,6 +78,7 @@ export function mapWorkOrderItems(
 
     return {
       itemType,
+      inventoryItemId: item.inventoryItemId || undefined,
       description: item.description,
       quantity,
       unitPrice,

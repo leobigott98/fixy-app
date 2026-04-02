@@ -39,6 +39,7 @@ export async function saveQuoteAction(
     revalidatePath("/app/dashboard");
     revalidatePath("/app/clients");
     revalidatePath("/app/vehicles");
+    revalidatePath("/app/inventory");
 
     return {
       success: true,
@@ -64,6 +65,7 @@ export async function updateQuoteLifecycleAction(
     revalidatePath(`/app/quotes/${quoteId}`);
     revalidatePath("/app/dashboard");
     revalidatePath("/app/work-orders");
+    revalidatePath("/app/inventory");
 
     return {
       success: true,

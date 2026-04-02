@@ -2,6 +2,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import { getInventoryPartOptions } from "@/lib/data/inventory";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import {
   normalizeQuoteInput,
@@ -33,6 +34,7 @@ export type QuoteItemRecord = {
   id: string;
   quote_id: string;
   workshop_id: string;
+  inventory_item_id: string | null;
   item_type: "labor" | "part";
   description: string;
   quantity: number;
@@ -82,6 +84,13 @@ export type QuoteFormOptions = {
     id: string;
     clientId: string | null;
     label: string;
+  }>;
+  inventoryItems: Array<{
+    id: string;
+    label: string;
+    name: string;
+    stockQuantity: number;
+    referenceSalePrice: number;
   }>;
 };
 
@@ -142,7 +151,7 @@ export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
 
-  const [clientsResult, vehiclesResult] = await Promise.all([
+  const [clientsResult, vehiclesResult, inventoryItems] = await Promise.all([
     supabase
       .from("clients")
       .select("id,full_name,whatsapp_phone")
@@ -153,6 +162,7 @@ export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
       .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
       .eq("workshop_id", workshop.id)
       .order("updated_at", { ascending: false }),
+    getInventoryPartOptions(),
   ]);
 
   const nonMissingError = [clientsResult.error, vehiclesResult.error].find(
@@ -178,6 +188,13 @@ export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
         vehicle.vehicle_label ??
         [vehicle.make, vehicle.model, vehicle.vehicle_year, vehicle.plate].filter(Boolean).join(" "),
     }))),
+    inventoryItems: inventoryItems.map((item) => ({
+      id: item.id,
+      label: item.label,
+      name: item.name,
+      stockQuantity: item.stockQuantity,
+      referenceSalePrice: item.referenceSalePrice,
+    })),
   };
 }
 
@@ -323,6 +340,7 @@ function formatQuoteItemsForInsert(quoteId: string, workshopId: string, items: Q
   return items.map((item) => ({
     quote_id: quoteId,
     workshop_id: workshopId,
+    inventory_item_id: item.itemType === "part" ? item.inventoryItemId ?? null : null,
     item_type: item.itemType,
     description: item.description,
     quantity: item.quantity,
@@ -525,27 +543,39 @@ export function buildQuoteFormDefaults(
     laborItems:
       source?.laborItems?.map((item) => ({
         rowId: item.id,
+        inventoryItemId: "",
         itemType: "labor",
         description: item.description,
         quantity: String(item.quantity),
         unitPrice: String(item.unit_price),
       })) ?? [
         {
-          rowId: crypto.randomUUID(),
-          itemType: "labor",
-          description: "",
-          quantity: "1",
+        rowId: crypto.randomUUID(),
+        inventoryItemId: "",
+        itemType: "labor",
+        description: "",
+        quantity: "1",
           unitPrice: "",
         },
       ],
     partItems:
       source?.partItems?.map((item) => ({
         rowId: item.id,
+        inventoryItemId: item.inventory_item_id ?? "",
         itemType: "part",
         description: item.description,
         quantity: String(item.quantity),
         unitPrice: String(item.unit_price),
-      })) ?? [],
+      })) ?? [
+        {
+          rowId: crypto.randomUUID(),
+          inventoryItemId: "",
+          itemType: "part",
+          description: "",
+          quantity: "1",
+          unitPrice: "",
+        },
+      ],
   };
 }
 

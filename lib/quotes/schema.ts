@@ -4,6 +4,7 @@ import { quoteItemTypeOptions, quoteStatusValues } from "@/lib/quotes/constants"
 
 export const quoteItemFormSchema = z.object({
   rowId: z.string(),
+  inventoryItemId: z.string(),
   itemType: z.enum(
     quoteItemTypeOptions.map((option) => option.value) as ["labor", "part"],
     "Selecciona el tipo de item.",
@@ -33,6 +34,7 @@ export type QuoteItemFormValues = z.infer<typeof quoteItemFormSchema>;
 
 export type QuoteItemInput = {
   itemType: "labor" | "part";
+  inventoryItemId?: string;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -58,6 +60,7 @@ export function mapQuoteItems(items: QuoteItemFormValues[], itemType: "labor" | 
 
     return {
       itemType,
+      inventoryItemId: item.inventoryItemId || undefined,
       description: item.description,
       quantity,
       unitPrice,

@@ -28,6 +28,7 @@ function revalidateWorkOrderPaths(workOrderId: string) {
   revalidatePath("/app/dashboard");
   revalidatePath("/app/quotes");
   revalidatePath("/app/mechanics");
+  revalidatePath("/app/inventory");
 }
 
 export async function saveWorkOrderAction(

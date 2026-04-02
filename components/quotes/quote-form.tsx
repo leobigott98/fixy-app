@@ -33,6 +33,13 @@ type QuoteFormProps = {
       clientId: string | null;
       label: string;
     }>;
+    inventoryItems: Array<{
+      id: string;
+      label: string;
+      name: string;
+      stockQuantity: number;
+      referenceSalePrice: number;
+    }>;
   };
   preferredCurrency: "USD" | "VES" | "USD_VES";
   quoteId?: string;
@@ -41,6 +48,7 @@ type QuoteFormProps = {
 function createEmptyItem(itemType: "labor" | "part"): QuoteItemFormValues {
   return {
     rowId: crypto.randomUUID(),
+    inventoryItemId: "",
     itemType,
     description: "",
     quantity: "1",
@@ -230,6 +238,7 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
               onAdd={() => laborItemsArray.append(createEmptyItem("labor"))}
               onRemove={(index) => laborItemsArray.remove(index)}
               register={register}
+              setValue={setValue}
             />
 
             <ItemsSection
@@ -241,7 +250,9 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
               onAdd={() => partItemsArray.append(createEmptyItem("part"))}
               onRemove={(index) => partItemsArray.remove(index)}
               register={register}
+              setValue={setValue}
               sectionName="partItems"
+              inventoryItems={options.inventoryItems}
             />
 
             <Field
@@ -309,6 +320,7 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
             {[
               "Cliente y vehiculo arriba para no perder contexto.",
               "Items separados por mano de obra y repuestos para lectura mas profesional.",
+              "Si el repuesto ya existe en inventario, puedes traerlo directo con precio de referencia.",
               "Totales visibles siempre para cotizar mas rapido desde el telefono.",
             ].map((item) => (
               <div key={item} className="flex gap-3 rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 text-sm leading-6">
@@ -328,21 +340,31 @@ function ItemsSection({
   description,
   fields,
   register,
+  setValue,
   onAdd,
   onRemove,
   errors,
   icon,
   sectionName = "laborItems",
+  inventoryItems,
 }: {
   label: string;
   description: string;
   fields: Array<{ id: string }>;
   register: ReturnType<typeof useForm<QuoteFormValues>>["register"];
+  setValue: ReturnType<typeof useForm<QuoteFormValues>>["setValue"];
   onAdd: () => void;
   onRemove: (index: number) => void;
   errors: any;
   icon: ReactNode;
   sectionName?: "laborItems" | "partItems";
+  inventoryItems?: Array<{
+    id: string;
+    label: string;
+    name: string;
+    stockQuantity: number;
+    referenceSalePrice: number;
+  }>;
 }) {
   return (
     <div className="space-y-4 rounded-[28px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
@@ -363,7 +385,52 @@ function ItemsSection({
       <div className="space-y-3">
         {fields.map((field, index) => (
           <div key={field.id} className="rounded-[24px] border border-[var(--line)] bg-white/80 p-4">
-            <div className="grid gap-3 sm:grid-cols-[1.2fr_0.45fr_0.55fr_auto]">
+            <div
+              className={
+                sectionName === "partItems"
+                  ? "grid gap-3 sm:grid-cols-[0.9fr_1.15fr_0.45fr_0.55fr_auto]"
+                  : "grid gap-3 sm:grid-cols-[1.2fr_0.45fr_0.55fr_auto]"
+              }
+            >
+              {sectionName === "partItems" ? (
+                <Field
+                  label="Inventario"
+                  error={errors?.[index]?.inventoryItemId?.message}
+                  input={(() => {
+                    const inventoryField = register(`${sectionName}.${index}.inventoryItemId`);
+
+                    return (
+                      <Select
+                        {...inventoryField}
+                        onChange={(event) => {
+                          inventoryField.onChange(event);
+                          const selectedItem = inventoryItems?.find((item) => item.id === event.target.value);
+
+                          if (!selectedItem) {
+                            return;
+                          }
+
+                          setValue(`${sectionName}.${index}.description`, selectedItem.name, {
+                            shouldDirty: true,
+                          });
+                          setValue(
+                            `${sectionName}.${index}.unitPrice`,
+                            String(selectedItem.referenceSalePrice || ""),
+                            { shouldDirty: true },
+                          );
+                        }}
+                      >
+                        <option value="">Repuesto libre</option>
+                        {(inventoryItems ?? []).map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </Select>
+                    );
+                  })()}
+                />
+              ) : null}
               <Field
                 label="Descripcion"
                 error={errors?.[index]?.description?.message}
@@ -398,6 +465,9 @@ function ItemsSection({
             </div>
             <input type="hidden" {...register(`${sectionName}.${index}.rowId`)} />
             <input type="hidden" {...register(`${sectionName}.${index}.itemType`)} />
+            {sectionName === "laborItems" ? (
+              <input type="hidden" {...register(`${sectionName}.${index}.inventoryItemId`)} />
+            ) : null}
           </div>
         ))}
       </div>
