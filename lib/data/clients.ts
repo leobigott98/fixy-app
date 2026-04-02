@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { isCollectedPaymentStatus } from "@/lib/finances/constants";
 import type { ClientProfileInput } from "@/lib/clients/schema";
 
 export type ClientRecord = {
@@ -49,6 +50,7 @@ type WorkOrderLiteRow = {
 
 type PaymentLiteRow = {
   amount: number | string | null;
+  status: string | null;
 };
 
 export type ClientListItem = ClientRecord & {
@@ -249,22 +251,19 @@ export async function getClientDetail(clientId: string): Promise<ClientDetailDat
   const workOrders = (workOrdersResult.data as WorkOrderLiteRow[] | null) ?? [];
   const quoteRows = (quotesResult.data as QuoteLiteRow[] | null) ?? [];
 
-  const paymentTargetIds = [
-    ...new Set([...quoteRows.map((quote) => quote.id), ...workOrders.map((order) => order.id)]),
-  ];
-
   let paymentSummary = {
     totalCollected: 0,
     paymentCount: 0,
   };
 
-  if (paymentTargetIds.length) {
+  if (quoteRows.length || workOrders.length || clientId) {
     const { data: paymentsData, error: paymentsError } = await supabase
       .from("payments")
-      .select("amount")
+      .select("amount,status")
       .eq("workshop_id", workshop.id)
       .or(
         [
+          `client_id.eq.${clientId}`,
           quoteRows.length ? `quote_id.in.(${quoteRows.map((quote) => quote.id).join(",")})` : "",
           workOrders.length
             ? `work_order_id.in.(${workOrders.map((order) => order.id).join(",")})`
@@ -281,7 +280,9 @@ export async function getClientDetail(clientId: string): Promise<ClientDetailDat
     const payments = (paymentsData as PaymentLiteRow[] | null) ?? [];
     paymentSummary = {
       paymentCount: payments.length,
-      totalCollected: payments.reduce((total, payment) => total + Number(payment.amount ?? 0), 0),
+      totalCollected: payments
+        .filter((payment) => isCollectedPaymentStatus(payment.status))
+        .reduce((total, payment) => total + Number(payment.amount ?? 0), 0),
     };
   }
 

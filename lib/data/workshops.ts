@@ -187,6 +187,7 @@ export async function getDashboardStats(workshopId: string): Promise<DashboardSt
       .from("payments")
       .select("amount")
       .eq("workshop_id", workshopId)
+      .in("status", ["paid", "partial"])
       .gte("paid_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
   ]);
 

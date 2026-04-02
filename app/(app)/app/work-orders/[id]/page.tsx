@@ -77,6 +77,12 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
             </Link>
           </Button>
         ) : null}
+        <Button asChild variant="primary">
+          <Link href={`/app/finances/payments/new?clientId=${client?.id ?? ""}&workOrderId=${workOrder.id}` as Route}>
+            <Coins className="size-4" />
+            Registrar pago
+          </Link>
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -176,6 +182,13 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
                 workshop.preferred_currency,
               )}
             />
+            <SummaryRow
+              label="Pendiente"
+              value={formatCurrencyDisplay(
+                paymentSummary.pendingBalance,
+                workshop.preferred_currency,
+              )}
+            />
             <div className="rounded-2xl bg-white/10 p-4">
               <div className="text-sm text-white/64">Total de la orden</div>
               <div className="mt-2 font-[family-name:var(--font-heading)] text-4xl font-bold tracking-tight">
@@ -260,9 +273,15 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
                 {formatCurrencyDisplay(paymentSummary.totalCollected, workshop.preferred_currency)}
               </div>
             </div>
+            <div className="rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
+              <div className="text-sm text-[var(--muted)]">Saldo pendiente</div>
+              <div className="mt-2 font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
+                {formatCurrencyDisplay(paymentSummary.pendingBalance, workshop.preferred_currency)}
+              </div>
+            </div>
             <div className="flex gap-3 rounded-2xl border border-dashed border-[var(--line)] bg-[rgba(249,115,22,0.04)] p-4 text-sm leading-6 text-[var(--muted)]">
               <Coins className="mt-0.5 size-4 shrink-0 text-[var(--primary-strong)]" />
-              El detalle de pagos y saldo pendiente crecera aqui en el siguiente modulo financiero.
+              El flujo de cobro ya puede registrarse desde esta orden sin salir del contexto del trabajo.
             </div>
           </CardContent>
         </Card>

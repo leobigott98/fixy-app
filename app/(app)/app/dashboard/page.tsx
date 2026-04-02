@@ -40,7 +40,7 @@ export default async function DashboardPage() {
       icon: ContactRound,
     },
     {
-      href: "/app/finances" as Route,
+      href: "/app/finances/payments/new" as Route,
       title: "Registrar cobro",
       description: "Conecta caja, pagos y entregas futuras.",
       icon: Coins,

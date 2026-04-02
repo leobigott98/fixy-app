@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { isCollectedPaymentStatus } from "@/lib/finances/constants";
 import type { QuoteItemRecord, QuoteRecord } from "@/lib/data/quotes";
 import { normalizeWorkOrderInput, type WorkOrderFormValues, type WorkOrderInput } from "@/lib/work-orders/schema";
 
@@ -80,6 +81,7 @@ type QuoteLite = {
 
 type PaymentLite = {
   amount: number | string | null;
+  status: string | null;
 };
 
 type WorkOrderRowWithRelations = WorkOrderRecord & {
@@ -113,6 +115,7 @@ export type WorkOrderDetailData = {
   paymentSummary: {
     totalCollected: number;
     paymentCount: number;
+    pendingBalance: number;
   };
 };
 
@@ -537,7 +540,7 @@ export async function getWorkOrderDetail(workOrderId: string): Promise<WorkOrder
       .eq("workshop_id", workshop.id)
       .eq("work_order_id", workOrderId)
       .order("changed_at", { ascending: false }),
-    supabase.from("payments").select("amount").eq("workshop_id", workshop.id).eq("work_order_id", workOrderId),
+    supabase.from("payments").select("amount,status").eq("workshop_id", workshop.id).eq("work_order_id", workOrderId),
   ]);
 
   const nonMissingError = [servicesResult.error, partsResult.error, statusHistoryResult.error, paymentsResult.error].find(
@@ -549,6 +552,9 @@ export async function getWorkOrderDetail(workOrderId: string): Promise<WorkOrder
   }
 
   const payments = (paymentsResult.data as PaymentLite[] | null) ?? [];
+  const totalCollected = payments
+    .filter((payment) => isCollectedPaymentStatus(payment.status))
+    .reduce((total, payment) => total + Number(payment.amount ?? 0), 0);
 
   return {
     workOrder: normalizeWorkOrderRecord(workOrderRow),
@@ -570,7 +576,8 @@ export async function getWorkOrderDetail(workOrderId: string): Promise<WorkOrder
     statusHistory: (statusHistoryResult.data as WorkOrderStatusHistoryRecord[] | null) ?? [],
     paymentSummary: {
       paymentCount: payments.length,
-      totalCollected: payments.reduce((total, payment) => total + Number(payment.amount ?? 0), 0),
+      totalCollected,
+      pendingBalance: Math.max(Number((Number(workOrderRow.total_amount ?? 0) - totalCollected).toFixed(2)), 0),
     },
   };
 }
