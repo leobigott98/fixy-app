@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { sessionCookieName } from "@/lib/auth/constants";
+
 export type AppSession = {
   user: {
     name: string;
@@ -9,11 +11,9 @@ export type AppSession = {
   };
 };
 
-const SESSION_COOKIE = "fixy_session";
-
 export async function getAppSession(): Promise<AppSession | null> {
   const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get(SESSION_COOKIE);
+  const sessionCookie = cookieStore.get(sessionCookieName);
 
   if (!sessionCookie?.value) {
     return null;
@@ -37,5 +37,3 @@ export async function requireAppSession() {
 
   return session;
 }
-
-export const sessionCookieName = SESSION_COOKIE;

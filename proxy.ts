@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { sessionCookieName } from "@/lib/auth/session";
+import { sessionCookieName } from "@/lib/auth/constants";
 
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = request.cookies.get(sessionCookieName)?.value;
   const isAuthRoute = AUTH_ROUTES.includes(pathname);

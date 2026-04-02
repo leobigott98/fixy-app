@@ -3,7 +3,7 @@
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { sessionCookieName } from "@/lib/auth/session";
+import { sessionCookieName } from "@/lib/auth/constants";
 import { Button } from "@/components/ui/button";
 
 export function LogoutButton() {

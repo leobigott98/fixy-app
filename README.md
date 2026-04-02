@@ -51,7 +51,7 @@ docs/
 
 ## Notes
 
-- `middleware.ts` protects `/app/*` with a Sprint 0 session cookie placeholder.
+- `proxy.ts` protects `/app/*` with a Sprint 0 session cookie placeholder.
 - Auth forms use React Hook Form + Zod and are ready to be connected to Supabase Auth in Sprint 1.
 - `lib/supabase` already contains browser/server client factories.
 - Module pages are scaffolded with shared visual foundations so Sprint 1 can focus on data and workflows.
