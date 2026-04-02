@@ -73,7 +73,7 @@ export type CalendarSummary = {
 };
 
 export type CalendarViewData = {
-  scope: "day" | "week";
+  scope: "day" | "week" | "month";
   selectedDate: string;
   summary: CalendarSummary;
   dayBuckets: AppointmentDayBucket[];
@@ -122,13 +122,41 @@ function getWeekStart(dateValue: string) {
   return date.toISOString().slice(0, 10);
 }
 
-function getScopeDates(dateValue: string, scope: "day" | "week") {
+function getMonthGridDates(dateValue: string) {
+  const target = new Date(`${dateValue}T12:00:00`);
+  const monthStart = new Date(target.getFullYear(), target.getMonth(), 1);
+  const monthEnd = new Date(target.getFullYear(), target.getMonth() + 1, 0);
+
+  const start = getWeekStart(monthStart.toISOString().slice(0, 10));
+  const monthEndIso = monthEnd.toISOString().slice(0, 10);
+  const monthEndDate = new Date(`${monthEndIso}T12:00:00`);
+  const end = addDays(monthEndIso, monthEndDate.getDay() === 0 ? 0 : 7 - monthEndDate.getDay());
+  const dates: string[] = [];
+
+  let cursor = start;
+  while (cursor <= end) {
+    dates.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+
+  return {
+    start,
+    end,
+    dates,
+  };
+}
+
+function getScopeDates(dateValue: string, scope: "day" | "week" | "month") {
   if (scope === "day") {
     return {
       start: dateValue,
       end: dateValue,
       dates: [dateValue],
     };
+  }
+
+  if (scope === "month") {
+    return getMonthGridDates(dateValue);
   }
 
   const start = getWeekStart(dateValue);
@@ -237,7 +265,7 @@ export async function getAppointmentFormOptions(): Promise<AppointmentFormOption
 
 export async function getCalendarViewData(params: {
   selectedDate: string;
-  scope: "day" | "week";
+  scope: "day" | "week" | "month";
 }): Promise<CalendarViewData> {
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
@@ -362,18 +390,24 @@ export async function requireAppointmentOrRedirect(appointmentId: string) {
   }
 }
 
-export function buildCalendarRangeHref(scope: "day" | "week", date: string) {
+export function buildCalendarRangeHref(scope: "day" | "week" | "month", date: string) {
   return `/app/calendar?scope=${scope}&date=${date}` as Route;
 }
 
-export function buildCalendarShiftHref(scope: "day" | "week", date: string, direction: "prev" | "next") {
+export function buildCalendarShiftHref(scope: "day" | "week" | "month", date: string, direction: "prev" | "next") {
+  if (scope === "month") {
+    const target = new Date(`${date}T12:00:00`);
+    target.setMonth(target.getMonth() + (direction === "prev" ? -1 : 1));
+    return buildCalendarRangeHref(scope, target.toISOString().slice(0, 10));
+  }
+
   const step = scope === "day" ? 1 : 7;
   const adjustedDate = addDays(date, direction === "prev" ? -step : step);
   return buildCalendarRangeHref(scope, adjustedDate);
 }
 
-export function getCalendarScopeLabel(scope: "day" | "week") {
-  return scope === "day" ? "Dia" : "Semana";
+export function getCalendarScopeLabel(scope: "day" | "week" | "month") {
+  return scope === "day" ? "Dia" : scope === "week" ? "Semana" : "Mes";
 }
 
 export function getAppointmentCardMeta(appointment: AppointmentListItem) {

@@ -6,12 +6,14 @@ import { CalendarDays, ClipboardList, FileText, MessageCircleMore, Send, SquareP
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge";
 import { CreateFromQuoteButton } from "@/components/work-orders/create-from-quote-button";
 import { PageHeader } from "@/components/shared/page-header";
+import { WhatsAppLinkButton } from "@/components/shared/whatsapp-link-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getQuoteDetail, getQuoteDocumentHref, getQuoteEditHref, getQuoteStatusLabel } from "@/lib/data/quotes";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { formatCurrencyDisplay } from "@/lib/utils";
+import { buildQuoteWhatsAppMessage, buildVehicleSummary, buildWhatsAppHref } from "@/lib/whatsapp";
 
 type QuoteDetailPageProps = {
   params: Promise<{
@@ -24,6 +26,20 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
   const { id } = await params;
   const detail = await getQuoteDetail(id);
   const { quote, client, vehicle, laborItems, partItems } = detail;
+  const sendQuoteHref =
+    client?.whatsapp_phone
+      ? buildWhatsAppHref(
+          client.whatsapp_phone,
+          buildQuoteWhatsAppMessage({
+            clientName: client.full_name,
+            workshopName: workshop.workshop_name,
+            vehicleSummary: buildVehicleSummary(vehicle),
+            quoteId: quote.id,
+            total: quote.total_amount,
+            currency: workshop.preferred_currency,
+          }),
+        )
+      : null;
 
   return (
     <div className="space-y-6">
@@ -41,6 +57,7 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
             PDF / Imprimir
           </Link>
         </Button>
+        <WhatsAppLinkButton href={sendQuoteHref} label="Enviar por WhatsApp" variant="primary" />
         {client ? (
           <Button asChild variant="outline">
             <Link href={`/app/clients/${client.id}` as Route}>Ver cliente</Link>
@@ -81,6 +98,7 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
                 {quote.notes || "Sin notas adicionales."}
               </div>
             </div>
+            <WhatsAppLinkButton href={sendQuoteHref} label="Mandar presupuesto" variant="primary" />
             {quote.status === "approved" ? <CreateFromQuoteButton quoteId={quote.id} /> : null}
           </CardContent>
         </Card>

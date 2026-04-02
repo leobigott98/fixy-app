@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
+import { WhatsAppLinkButton } from "@/components/shared/whatsapp-link-button";
 import { WorkOrderStatusBadge } from "@/components/work-orders/work-order-status-badge";
 import { WorkOrderStatusControl } from "@/components/work-orders/work-order-status-control";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,13 @@ import {
 } from "@/lib/data/work-orders";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { formatCurrencyDisplay } from "@/lib/utils";
+import {
+  buildPaymentReminderMessage,
+  buildReadyForPickupMessage,
+  buildVehicleSummary,
+  buildWhatsAppHref,
+  buildWorkOrderStatusMessage,
+} from "@/lib/whatsapp";
 
 type WorkOrderDetailPageProps = {
   params: Promise<{
@@ -39,6 +47,49 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
   const detail = await getWorkOrderDetail(id);
   const { workOrder, client, vehicle, quote, services, parts, statusHistory, paymentSummary } =
     detail;
+  const statusUpdateHref =
+    client?.whatsapp_phone
+      ? buildWhatsAppHref(
+          client.whatsapp_phone,
+          buildWorkOrderStatusMessage({
+            clientName: client.full_name,
+            workshopName: workshop.workshop_name,
+            vehicleSummary: buildVehicleSummary(vehicle),
+            workOrderCode: workOrder.code,
+            statusLabel: getWorkOrderStatusLabel(workOrder.status),
+          }),
+        )
+      : null;
+  const readyForPickupHref =
+    client?.whatsapp_phone &&
+    (workOrder.status === "listo_para_entrega" || workOrder.status === "completada")
+      ? buildWhatsAppHref(
+          client.whatsapp_phone,
+          buildReadyForPickupMessage({
+            clientName: client.full_name,
+            workshopName: workshop.workshop_name,
+            vehicleSummary: buildVehicleSummary(vehicle),
+            workOrderCode: workOrder.code,
+            total: workOrder.total_amount,
+            pendingBalance: paymentSummary.pendingBalance,
+            currency: workshop.preferred_currency,
+          }),
+        )
+      : null;
+  const paymentReminderHref =
+    client?.whatsapp_phone && paymentSummary.pendingBalance > 0
+      ? buildWhatsAppHref(
+          client.whatsapp_phone,
+          buildPaymentReminderMessage({
+            clientName: client.full_name,
+            workshopName: workshop.workshop_name,
+            vehicleSummary: buildVehicleSummary(vehicle),
+            workOrderCode: workOrder.code,
+            pendingBalance: paymentSummary.pendingBalance,
+            currency: workshop.preferred_currency,
+          }),
+        )
+      : null;
 
   return (
     <div className="space-y-6">
@@ -60,6 +111,8 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
             PDF / Imprimir
           </Link>
         </Button>
+        <WhatsAppLinkButton href={statusUpdateHref} label="Enviar actualizacion" variant="outline" />
+        <WhatsAppLinkButton href={readyForPickupHref} label="Listo para entregar" variant="outline" />
         {client ? (
           <Button asChild variant="outline">
             <Link href={`/app/clients/${client.id}` as Route}>
@@ -90,6 +143,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
             Registrar pago
           </Link>
         </Button>
+        <WhatsAppLinkButton href={paymentReminderHref} label="Recordar pago" variant="primary" />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -155,6 +209,10 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
               <div className="mt-2 text-sm leading-6 text-[var(--muted)]">
                 {workOrder.notes || "Sin notas adicionales."}
               </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <WhatsAppLinkButton href={statusUpdateHref} label="Actualizar por WhatsApp" variant="outline" />
+              <WhatsAppLinkButton href={readyForPickupHref} label="Avisar entrega" variant="outline" />
             </div>
           </CardContent>
         </Card>
@@ -318,6 +376,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
               <Coins className="mt-0.5 size-4 shrink-0 text-[var(--primary-strong)]" />
               El flujo de cobro ya puede registrarse desde esta orden sin salir del contexto del trabajo.
             </div>
+            <WhatsAppLinkButton href={paymentReminderHref} label="Enviar recordatorio de pago" variant="primary" />
           </CardContent>
         </Card>
       </div>

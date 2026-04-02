@@ -31,7 +31,11 @@ function getQueryValue(value?: string | string[]) {
 }
 
 function resolveScope(value?: string) {
-  return value === "week" ? "week" : "day";
+  if (value === "week" || value === "month") {
+    return value;
+  }
+
+  return "day";
 }
 
 function resolveDate(value?: string) {
@@ -79,6 +83,12 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
               icon: <CalendarRange className="size-4" />,
               active: scope === "week",
             },
+            {
+              href: buildCalendarRangeHref("month", selectedDate),
+              label: "Mes",
+              icon: <CalendarDays className="size-4" />,
+              active: scope === "month",
+            },
           ]}
         />
 
@@ -86,7 +96,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
           <Button asChild size="sm" variant="outline">
             <Link href={buildCalendarShiftHref(scope, selectedDate, "prev")}>
               <ChevronLeft className="size-4" />
-              {scope === "day" ? "Dia anterior" : "Semana anterior"}
+              {scope === "day" ? "Dia anterior" : scope === "week" ? "Semana anterior" : "Mes anterior"}
             </Link>
           </Button>
           <Button asChild size="sm" variant="outline">
@@ -96,7 +106,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
           </Button>
           <Button asChild size="sm" variant="outline">
             <Link href={buildCalendarShiftHref(scope, selectedDate, "next")}>
-              {scope === "day" ? "Dia siguiente" : "Semana siguiente"}
+              {scope === "day" ? "Dia siguiente" : scope === "week" ? "Semana siguiente" : "Mes siguiente"}
               <ChevronRight className="size-4" />
             </Link>
           </Button>
@@ -136,7 +146,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
             )}
           </CardContent>
         </Card>
-      ) : (
+      ) : scope === "week" ? (
         <div className="grid gap-4 xl:grid-cols-7">
           {data.dayBuckets.map((bucket) => (
             <Card className="bg-white/86" key={bucket.date}>
@@ -184,6 +194,37 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
             </Card>
           ))}
         </div>
+      ) : (
+        <Card className="bg-white/86">
+          <CardHeader>
+            <CardTitle>
+              {new Intl.DateTimeFormat("es-VE", {
+                month: "long",
+                year: "numeric",
+              }).format(new Date(`${selectedDate}T12:00:00`))}
+            </CardTitle>
+            <CardDescription>
+              Vista mensual para entender la distribucion de citas y detectar dias cargados de un vistazo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <div className="min-w-[760px]">
+              <div className="grid grid-cols-7 gap-3">
+                {["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"].map((label) => (
+                  <div
+                    key={label}
+                    className="rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.03)] px-3 py-2 text-sm font-medium text-[var(--muted)]"
+                  >
+                    {label}
+                  </div>
+                ))}
+                {data.dayBuckets.map((bucket) => (
+                  <MonthDayCell key={bucket.date} selectedDate={selectedDate} bucket={bucket} />
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <Card className="bg-white/86">
@@ -299,6 +340,58 @@ function EmptyCalendarState({ selectedDate }: { selectedDate: string }) {
             <span>{item}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function MonthDayCell({
+  bucket,
+  selectedDate,
+}: {
+  bucket: Awaited<ReturnType<typeof getCalendarViewData>>["dayBuckets"][number];
+  selectedDate: string;
+}) {
+  const isCurrentMonth = bucket.date.slice(0, 7) === selectedDate.slice(0, 7);
+  const isSelectedDay = bucket.date === selectedDate;
+
+  return (
+    <div
+      className={
+        isSelectedDay
+          ? "min-h-[168px] rounded-[24px] border border-[rgba(249,115,22,0.34)] bg-[rgba(249,115,22,0.08)] p-3"
+          : isCurrentMonth
+            ? "min-h-[168px] rounded-[24px] border border-[var(--line)] bg-white/80 p-3"
+            : "min-h-[168px] rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.03)] p-3 opacity-70"
+      }
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-[var(--foreground)]">{bucket.date.slice(-2)}</div>
+        <div className="text-xs text-[var(--muted)]">{bucket.appointments.length}</div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {bucket.appointments.slice(0, 3).map((appointment) => (
+          <Link
+            key={appointment.id}
+            className="block rounded-2xl bg-[rgba(21,28,35,0.05)] p-2 hover:bg-[rgba(249,115,22,0.08)]"
+            href={getAppointmentEditHref(appointment.id)}
+          >
+            <div className="text-xs font-semibold">{appointment.displayTime}</div>
+            <div className="mt-1 text-xs leading-5 text-[var(--foreground)]">
+              {appointment.client?.full_name || "Cliente"}
+            </div>
+            <div className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+              {appointment.notes || getAppointmentTypeLabel(appointment.appointment_type)}
+            </div>
+          </Link>
+        ))}
+
+        {bucket.appointments.length > 3 ? (
+          <div className="rounded-2xl border border-dashed border-[var(--line)] px-2 py-1.5 text-[11px] text-[var(--muted)]">
+            +{bucket.appointments.length - 3} mas
+          </div>
+        ) : null}
       </div>
     </div>
   );

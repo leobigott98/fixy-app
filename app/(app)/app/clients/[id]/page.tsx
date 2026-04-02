@@ -3,11 +3,18 @@ import type { Route } from "next";
 import { CarFront, CreditCard, MessageCircleMore, Phone, Plus, ReceiptText, SquarePen, Wrench } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
+import { WhatsAppLinkButton } from "@/components/shared/whatsapp-link-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getClientDetail, getClientEditHref } from "@/lib/data/clients";
+import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { formatCurrencyDisplay } from "@/lib/utils";
+import {
+  buildClientGreetingMessage,
+  buildVehicleSummary,
+  buildWhatsAppHref,
+} from "@/lib/whatsapp";
 
 type ClientDetailPageProps = {
   params: Promise<{
@@ -50,9 +57,18 @@ function formatWorkOrderStatus(status: string) {
 }
 
 export default async function ClientDetailPage({ params }: ClientDetailPageProps) {
+  const workshop = await requireCurrentWorkshop();
   const { id } = await params;
   const detail = await getClientDetail(id);
   const { client, vehicles, quotes, workOrders, paymentSummary } = detail;
+  const whatsappHref = buildWhatsAppHref(
+    client.whatsapp_phone || client.phone,
+    buildClientGreetingMessage({
+      clientName: client.full_name,
+      workshopName: workshop.workshop_name,
+      vehicleSummary: vehicles[0] ? buildVehicleSummary(vehicles[0]) : null,
+    }),
+  );
 
   return (
     <div className="space-y-6">
@@ -82,6 +98,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
             Nuevo vehiculo
           </Link>
         </Button>
+        <WhatsAppLinkButton href={whatsappHref} label="WhatsApp" />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -122,6 +139,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                 {client.notes || "Sin notas todavia."}
               </div>
             </div>
+            <WhatsAppLinkButton href={whatsappHref} label="Escribir por WhatsApp" variant="primary" />
           </CardContent>
         </Card>
 
