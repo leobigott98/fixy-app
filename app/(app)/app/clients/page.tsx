@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getClientDetailHref, getClientEditHref, getClientsList } from "@/lib/data/clients";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getPreferredListView } from "@/lib/view-preferences";
 
 type ClientsPageProps = {
   searchParams: Promise<{
@@ -20,10 +21,6 @@ type ClientsPageProps = {
 
 function getQueryValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function getViewValue(value?: string) {
-  return value === "table" ? "table" : "cards";
 }
 
 function buildViewHref(view: "cards" | "table", query?: string) {
@@ -42,7 +39,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   await requireCurrentWorkshop();
   const params = await searchParams;
   const query = getQueryValue(params.q);
-  const view = getViewValue(getQueryValue(params.view));
+  const view = await getPreferredListView(getQueryValue(params.view));
   const clients = await getClientsList(query);
 
   return (

@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getMechanicDetailHref, getMechanicEditHref, getMechanicsList } from "@/lib/data/mechanics";
 import { getMechanicRoleLabel } from "@/lib/mechanics/constants";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getPreferredListView } from "@/lib/view-preferences";
 
 type MechanicsPageProps = {
   searchParams: Promise<{
@@ -21,10 +22,6 @@ type MechanicsPageProps = {
 
 function getQueryValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function getViewValue(value?: string) {
-  return value === "table" ? "table" : "cards";
 }
 
 function buildViewHref(view: "cards" | "table", query?: string) {
@@ -43,7 +40,7 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
   await requireCurrentWorkshop();
   const params = await searchParams;
   const query = getQueryValue(params.q);
-  const view = getViewValue(getQueryValue(params.view));
+  const view = await getPreferredListView(getQueryValue(params.view));
   const mechanics = await getMechanicsList(query);
 
   return (

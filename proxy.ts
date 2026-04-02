@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { sessionCookieName } from "@/lib/auth/constants";
+import { listViewCookieName } from "@/lib/view-preference-constants";
 
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"];
 
@@ -19,7 +20,18 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/app/dashboard", request.url));
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  const requestedView = request.nextUrl.searchParams.get("view");
+
+  if (requestedView === "cards" || requestedView === "table") {
+    response.cookies.set(listViewCookieName, requestedView, {
+      path: "/",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
+
+  return response;
 }
 
 export const config = {

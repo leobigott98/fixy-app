@@ -15,6 +15,7 @@ import {
 } from "@/lib/data/inventory";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { formatCurrencyDisplay } from "@/lib/utils";
+import { getPreferredListView } from "@/lib/view-preferences";
 
 type InventoryPageProps = {
   searchParams: Promise<{
@@ -25,10 +26,6 @@ type InventoryPageProps = {
 
 function getQueryValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function getViewValue(value?: string) {
-  return value === "table" ? "table" : "cards";
 }
 
 function buildViewHref(view: "cards" | "table", query?: string) {
@@ -47,7 +44,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
   await requireCurrentWorkshop();
   const params = await searchParams;
   const query = getQueryValue(params.q);
-  const view = getViewValue(getQueryValue(params.view));
+  const view = await getPreferredListView(getQueryValue(params.view));
   const items = await getInventoryList(query);
   const lowStockCount = items.filter((item) => item.lowStock).length;
 

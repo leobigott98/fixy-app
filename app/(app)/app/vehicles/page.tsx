@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getVehicleDetailHref, getVehicleEditHref, getVehiclesList } from "@/lib/data/vehicles";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getPreferredListView } from "@/lib/view-preferences";
 
 type VehiclesPageProps = {
   searchParams: Promise<{
@@ -20,10 +21,6 @@ type VehiclesPageProps = {
 
 function getQueryValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function getViewValue(value?: string) {
-  return value === "table" ? "table" : "cards";
 }
 
 function buildViewHref(view: "cards" | "table", query?: string) {
@@ -42,7 +39,7 @@ export default async function VehiclesPage({ searchParams }: VehiclesPageProps) 
   await requireCurrentWorkshop();
   const params = await searchParams;
   const query = getQueryValue(params.q);
-  const view = getViewValue(getQueryValue(params.view));
+  const view = await getPreferredListView(getQueryValue(params.view));
   const vehicles = await getVehiclesList(query);
 
   return (

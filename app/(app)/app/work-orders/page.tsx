@@ -21,6 +21,7 @@ import {
 } from "@/lib/data/work-orders";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { formatCurrencyDisplay } from "@/lib/utils";
+import { getPreferredWorkOrdersView } from "@/lib/view-preferences";
 
 type WorkOrdersPageProps = {
   searchParams: Promise<{
@@ -31,14 +32,6 @@ type WorkOrdersPageProps = {
 
 function getQueryValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function getViewValue(value?: string) {
-  if (value === "cards" || value === "table") {
-    return value;
-  }
-
-  return "board";
 }
 
 function buildViewHref(view: "board" | "cards" | "table", query?: string) {
@@ -76,7 +69,7 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
   const workshop = await requireCurrentWorkshop();
   const params = await searchParams;
   const query = getQueryValue(params.q);
-  const view = getViewValue(getQueryValue(params.view));
+  const view = await getPreferredWorkOrdersView(getQueryValue(params.view));
 
   const boardData = view === "board" ? await getWorkOrdersBoardData(query) : null;
   const workOrders = view === "board" ? await getWorkOrdersList(query) : await getWorkOrdersList(query);
