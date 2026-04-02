@@ -41,7 +41,13 @@ docs/
 - `/app/onboarding`
 - `/app/dashboard`
 - `/app/clients`
+- `/app/clients/new`
+- `/app/clients/[id]`
+- `/app/clients/[id]/edit`
 - `/app/vehicles`
+- `/app/vehicles/new`
+- `/app/vehicles/[id]`
+- `/app/vehicles/[id]/edit`
 - `/app/quotes`
 - `/app/work-orders`
 - `/app/mechanics`
@@ -56,5 +62,5 @@ docs/
 - `/app/onboarding` is the Sprint 1 workshop setup flow and redirects into `/app/dashboard`.
 - Auth forms use React Hook Form + Zod and are ready to be connected to Supabase Auth in Sprint 1.
 - `lib/supabase` contains browser/server clients plus an admin client for server-side Sprint 1 data access.
-- Run the SQL in [supabase/migrations/202604010001_sprint_1_foundation.sql](C:\Users\l_a_b\Dropbox\PC\Documents\fixy-app\supabase\migrations\202604010001_sprint_1_foundation.sql) before testing onboarding saves.
+- Run the SQL in [supabase/migrations/202604010001_sprint_1_foundation.sql](C:\Users\l_a_b\Dropbox\PC\Documents\fixy-app\supabase\migrations\202604010001_sprint_1_foundation.sql) and [supabase/migrations/202604010002_sprint_2_clients_vehicles.sql](C:\Users\l_a_b\Dropbox\PC\Documents\fixy-app\supabase\migrations\202604010002_sprint_2_clients_vehicles.sql) before testing onboarding and Sprint 2 CRUD flows.
 - Module pages stay scaffolded, but now require a workshop profile before access.

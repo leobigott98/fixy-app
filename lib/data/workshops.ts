@@ -2,8 +2,7 @@ import type { Route } from "next";
 import { redirect } from "next/navigation";
 
 import { getAppSession } from "@/lib/auth/session";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
 import { buildOpeningHoursLabel, type WorkshopProfileInput } from "@/lib/workshops/schema";
 
 export type WorkshopRecord = {
@@ -53,10 +52,6 @@ type PaymentRow = {
   amount: number | string | null;
 };
 
-function isMissingRelationError(error: { code?: string } | null) {
-  return error?.code === "42P01";
-}
-
 function formatDashboardStatus(status: string) {
   switch (status) {
     case "received":
@@ -74,14 +69,6 @@ function formatDashboardStatus(status: string) {
     default:
       return status;
   }
-}
-
-async function createSupabaseDataClient() {
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return createSupabaseAdminClient();
-  }
-
-  return createSupabaseServerClient();
 }
 
 export async function getCurrentWorkshop() {
