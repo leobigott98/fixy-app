@@ -6,6 +6,7 @@ import {
   CarFront,
   ClipboardList,
   Coins,
+  FileText,
   MessageCircleMore,
   SquarePen,
   UserRound,
@@ -53,6 +54,12 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
       />
 
       <div className="flex flex-col gap-3 sm:flex-row">
+        <Button asChild variant="outline">
+          <Link href={`/app/work-orders/${workOrder.id}/document` as Route}>
+            <FileText className="size-4" />
+            PDF / Imprimir
+          </Link>
+        </Button>
         {client ? (
           <Button asChild variant="outline">
             <Link href={`/app/clients/${client.id}` as Route}>

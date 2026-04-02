@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, CreditCard, Receipt, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Receipt, Wallet } from "lucide-react";
 
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PaymentStatusBadge } from "@/components/finances/payment-status-badge";
@@ -13,6 +13,7 @@ import {
   getFinanceExpenseNewHref,
   getFinancePaymentNewHref,
   getFinancesOverview,
+  getPaymentReceiptHref,
 } from "@/lib/data/finances";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { getExpenseCategoryLabel, getPaymentMethodLabel } from "@/lib/finances/constants";
@@ -194,15 +195,30 @@ export default async function FinancesPage({ searchParams }: FinancesPageProps) 
                         <div className="mt-2 text-sm text-[var(--muted)]">{item.payment.notes}</div>
                       ) : null}
                       {item.payment.proof_url ? (
-                        <a
+                        <div className="mt-2 flex flex-wrap gap-3">
+                          <a
+                            className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                            href={item.payment.proof_url}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            Ver comprobante
+                          </a>
+                          <Link
+                            className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                            href={getPaymentReceiptHref(item.payment.id)}
+                          >
+                            Recibo PDF
+                          </Link>
+                        </div>
+                      ) : (
+                        <Link
                           className="mt-2 inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
-                          href={item.payment.proof_url}
-                          rel="noreferrer"
-                          target="_blank"
+                          href={getPaymentReceiptHref(item.payment.id)}
                         >
-                          Ver comprobante
-                        </a>
-                      ) : null}
+                          Recibo PDF
+                        </Link>
+                      )}
                     </div>
                     <div className="text-left sm:text-right">
                       <div className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
@@ -254,6 +270,21 @@ export default async function FinancesPage({ searchParams }: FinancesPageProps) 
                       </div>
                       {item.expense.notes ? (
                         <div className="mt-2 text-sm text-[var(--muted)]">{item.expense.notes}</div>
+                      ) : null}
+                      {item.assets.length ? (
+                        <div className="mt-2 flex flex-wrap gap-3">
+                          {item.assets.map((asset, index) => (
+                            <a
+                              key={asset.id}
+                              className="inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                              href={asset.asset_url}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Soporte {index + 1}
+                            </a>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
                     <div className="text-left sm:text-right">

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { upsertQuote } from "@/lib/data/quotes";
+import { updateQuoteLifecycle, upsertQuote } from "@/lib/data/quotes";
 import { quoteFormSchema, type QuoteFormValues } from "@/lib/quotes/schema";
 
 type SaveQuoteResult =
@@ -49,6 +49,36 @@ export async function saveQuoteAction(
     return {
       success: false,
       message: error instanceof Error ? error.message : "No se pudo guardar el presupuesto.",
+    };
+  }
+}
+
+export async function updateQuoteLifecycleAction(
+  quoteId: string,
+  action: "archive" | "restore" | "delete",
+): Promise<SaveQuoteResult> {
+  try {
+    const quote = await updateQuoteLifecycle(quoteId, action);
+
+    revalidatePath("/app/quotes");
+    revalidatePath(`/app/quotes/${quoteId}`);
+    revalidatePath("/app/dashboard");
+    revalidatePath("/app/work-orders");
+
+    return {
+      success: true,
+      message:
+        action === "archive"
+          ? "Presupuesto archivado."
+          : action === "restore"
+            ? "Presupuesto reactivado."
+            : "Presupuesto eliminado.",
+      quoteId: quote.id,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "No se pudo actualizar el presupuesto.",
     };
   }
 }

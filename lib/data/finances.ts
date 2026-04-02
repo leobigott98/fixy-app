@@ -62,6 +62,15 @@ export type ExpenseRecord = {
   created_at: string;
 };
 
+export type ExpenseAssetRecord = {
+  id: string;
+  expense_id: string;
+  workshop_id: string;
+  asset_url: string;
+  sort_order: number;
+  created_at: string;
+};
+
 type PaymentRowWithRelations = Omit<PaymentRecord, "amount"> & {
   amount: number | string | null;
   clients: ClientLite | ClientLite[] | null;
@@ -71,6 +80,7 @@ type PaymentRowWithRelations = Omit<PaymentRecord, "amount"> & {
 type ExpenseRowWithRelations = Omit<ExpenseRecord, "amount"> & {
   amount: number | string | null;
   work_orders: WorkOrderLite | WorkOrderLite[] | null;
+  expense_assets: ExpenseAssetRecord[] | null;
 };
 
 type WorkOrderBalanceRow = {
@@ -135,6 +145,7 @@ export type PaymentHistoryItem = {
 export type ExpenseListItem = {
   expense: ExpenseRecord;
   workOrder: WorkOrderLite | null;
+  assets: ExpenseAssetRecord[];
 };
 
 export type FinancesOverviewData = {
@@ -196,7 +207,7 @@ export async function getFinancesOverview(search?: string): Promise<FinancesOver
       .order("paid_at", { ascending: false }),
     supabase
       .from("expenses")
-      .select("*, work_orders(id,client_id,code,title,status,total_amount,promised_date,vehicle_label)")
+      .select("*, work_orders(id,client_id,code,title,status,total_amount,promised_date,vehicle_label), expense_assets(*)")
       .eq("workshop_id", workshop.id)
       .order("spent_at", { ascending: false }),
     supabase
@@ -226,6 +237,7 @@ export async function getFinancesOverview(search?: string): Promise<FinancesOver
   const expenses = ((expensesResult.data as ExpenseRowWithRelations[] | null) ?? []).map((row) => ({
     expense: normalizeExpenseRecord(row),
     workOrder: toSingleRelation(row.work_orders),
+    assets: (row.expense_assets ?? []).sort((a, b) => a.sort_order - b.sort_order),
   }));
 
   const workOrders = (workOrdersResult.data as WorkOrderBalanceRow[] | null) ?? [];
@@ -516,7 +528,66 @@ export async function createExpense(values: ExpenseFormValues) {
     throw error;
   }
 
-  return data as ExpenseRecord;
+  const expense = data as ExpenseRecord;
+
+  if (input.assetUrls.length) {
+    const { error: assetError } = await supabase.from("expense_assets").insert(
+      input.assetUrls.map((assetUrl, index) => ({
+        expense_id: expense.id,
+        workshop_id: workshop.id,
+        asset_url: assetUrl,
+        sort_order: index,
+      })),
+    );
+
+    if (assetError) {
+      throw assetError;
+    }
+  }
+
+  return expense;
+}
+
+export type PaymentReceiptDetail = {
+  payment: PaymentRecord;
+  client: ClientLite | null;
+  workOrder: WorkOrderLite | null;
+  workshop: Awaited<ReturnType<typeof requireCurrentWorkshop>>;
+};
+
+export async function getPaymentReceiptDetail(paymentId: string): Promise<PaymentReceiptDetail> {
+  const workshop = await requireCurrentWorkshop();
+  const supabase = await createSupabaseDataClient();
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      "*, clients(id,full_name,whatsapp_phone), work_orders(id,client_id,code,title,status,total_amount,promised_date,vehicle_label)",
+    )
+    .eq("workshop_id", workshop.id)
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      throw new Error("Pago no encontrado.");
+    }
+
+    throw error;
+  }
+
+  const row = data as PaymentRowWithRelations | null;
+
+  if (!row) {
+    throw new Error("Pago no encontrado.");
+  }
+
+  return {
+    payment: normalizePaymentRecord(row),
+    client: toSingleRelation(row.clients),
+    workOrder: toSingleRelation(row.work_orders),
+    workshop,
+  };
 }
 
 export function getFinancePaymentNewHref() {
@@ -525,4 +596,8 @@ export function getFinancePaymentNewHref() {
 
 export function getFinanceExpenseNewHref() {
   return "/app/finances/expenses/new" as Route;
+}
+
+export function getPaymentReceiptHref(paymentId: string) {
+  return `/app/finances/payments/${paymentId}/receipt` as Route;
 }

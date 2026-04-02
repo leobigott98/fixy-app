@@ -99,6 +99,7 @@ export const expenseFormSchema = z.object({
   ),
   date: z.string().min(1, "Selecciona la fecha."),
   notes: z.string().max(500, "Usa una nota mas corta."),
+  assetUrls: z.array(z.string().url("Sube archivos validos.")).max(8, "Maximo 8 archivos."),
 });
 
 export type ExpenseFormValues = {
@@ -107,6 +108,7 @@ export type ExpenseFormValues = {
   category: ExpenseCategory;
   date: string;
   notes: string;
+  assetUrls: string[];
 };
 
 export type ExpenseInput = {
@@ -115,6 +117,7 @@ export type ExpenseInput = {
   category: ExpenseCategory;
   date: string;
   notes: string | null;
+  assetUrls: string[];
 };
 
 export function normalizeExpenseInput(values: ExpenseFormValues): ExpenseInput {
@@ -124,6 +127,7 @@ export function normalizeExpenseInput(values: ExpenseFormValues): ExpenseInput {
     category: values.category,
     date: values.date,
     notes: values.notes?.trim() ? values.notes.trim() : null,
+    assetUrls: values.assetUrls,
   };
 }
 
@@ -134,5 +138,6 @@ export function buildExpenseFormDefaults(source?: { selectedWorkOrderId?: string
     category: "repuestos" as ExpenseCategory,
     date: todayValue(),
     notes: "",
+    assetUrls: [],
   } satisfies ExpenseFormValues;
 }

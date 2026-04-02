@@ -23,6 +23,8 @@ export type QuoteRecord = {
   notes: string | null;
   sent_at: string | null;
   approved_at: string | null;
+  archived_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -100,6 +102,14 @@ function toSingleRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
+function normalizeQuoteRecord(record: QuoteRecord) {
+  return {
+    ...record,
+    subtotal: Number(record.subtotal ?? 0),
+    total_amount: Number(record.total_amount ?? 0),
+  };
+}
+
 export function getQuoteStatusLabel(status: QuoteRecord["status"]) {
   switch (status) {
     case "draft":
@@ -171,16 +181,20 @@ export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
   };
 }
 
-export async function getQuotesList(search?: string): Promise<QuoteListItem[]> {
+export async function getQuotesList(search?: string, view: "active" | "archived" = "active"): Promise<QuoteListItem[]> {
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
   const query = search?.trim() ?? "";
 
-  const quotesQuery = supabase
+  let quotesQuery = supabase
     .from("quotes")
     .select("*, clients(id,full_name,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year)")
     .eq("workshop_id", workshop.id)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
+
+  quotesQuery =
+    view === "archived" ? quotesQuery.not("archived_at", "is", null) : quotesQuery.is("archived_at", null);
 
   const { data, error } = await quotesQuery;
 
@@ -238,11 +252,9 @@ export async function getQuotesList(search?: string): Promise<QuoteListItem[]> {
   ));
 
   return rows.map((quote) => ({
-    ...quote,
+    ...normalizeQuoteRecord(quote),
     client: toSingleRelation(quote.clients),
     vehicle: toSingleRelation(quote.vehicles),
-    subtotal: Number(quote.subtotal ?? 0),
-    total_amount: Number(quote.total_amount ?? 0),
     itemCount: itemCounts[quote.id] ?? 0,
   }));
 }
@@ -268,7 +280,7 @@ export async function getQuoteDetail(quoteId: string): Promise<QuoteDetailData> 
 
   const quote = quoteData as QuoteRowWithRelations | null;
 
-  if (!quote) {
+  if (!quote || quote.deleted_at) {
     notFound();
   }
 
@@ -293,11 +305,7 @@ export async function getQuoteDetail(quoteId: string): Promise<QuoteDetailData> 
   }));
 
   return {
-    quote: {
-      ...quote,
-      subtotal: Number(quote.subtotal ?? 0),
-      total_amount: Number(quote.total_amount ?? 0),
-    },
+    quote: normalizeQuoteRecord(quote),
     client: toSingleRelation(quote.clients),
     vehicle: toSingleRelation(quote.vehicles),
     laborItems: items.filter((item) => item.item_type === "labor"),
@@ -402,6 +410,7 @@ export async function upsertQuote(inputValues: QuoteFormValues, quoteId?: string
     notes: input.notes || null,
     sent_at: timestamps.sentAt,
     approved_at: timestamps.approvedAt,
+    deleted_at: null,
   };
 
   const query = quoteId
@@ -441,10 +450,42 @@ export async function upsertQuote(inputValues: QuoteFormValues, quoteId?: string
   }
 
   return {
-    ...quote,
-    subtotal: Number(quote.subtotal ?? 0),
-    total_amount: Number(quote.total_amount ?? 0),
+    ...normalizeQuoteRecord(quote),
   };
+}
+
+export async function updateQuoteLifecycle(
+  quoteId: string,
+  action: "archive" | "restore" | "delete",
+) {
+  const workshop = await requireCurrentWorkshop();
+  const supabase = await createSupabaseDataClient();
+  const now = new Date().toISOString();
+
+  const payload =
+    action === "archive"
+      ? { archived_at: now }
+      : action === "restore"
+        ? { archived_at: null }
+        : { deleted_at: now };
+
+  const { data, error } = await supabase
+    .from("quotes")
+    .update(payload)
+    .eq("workshop_id", workshop.id)
+    .eq("id", quoteId)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Presupuesto no encontrado.");
+  }
+
+  return normalizeQuoteRecord(data as QuoteRecord);
 }
 
 export function getQuoteDetailHref(quoteId: string) {
@@ -453,6 +494,10 @@ export function getQuoteDetailHref(quoteId: string) {
 
 export function getQuoteEditHref(quoteId: string) {
   return `/app/quotes/${quoteId}/edit` as Route;
+}
+
+export function getQuoteDocumentHref(quoteId: string) {
+  return `/app/quotes/${quoteId}/document` as Route;
 }
 
 export function buildQuoteFormDefaults(

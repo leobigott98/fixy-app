@@ -108,19 +108,32 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
           placeholder="Busca por codigo, cliente, vehiculo, responsable o nota"
           query={query}
         />
-        <div className="flex gap-2 rounded-[28px] border border-[var(--line)] bg-white/76 p-2 shadow-[0_18px_40px_rgba(21,28,35,0.06)]">
-          <Button asChild variant={view === "board" ? "primary" : "outline"}>
-            <Link href={buildViewHref("board", query)}>
-              <Columns3 className="size-4" />
-              Board
-            </Link>
-          </Button>
-          <Button asChild variant={view === "list" ? "primary" : "outline"}>
-            <Link href={buildViewHref("list", query)}>
-              <List className="size-4" />
-              Lista
-            </Link>
-          </Button>
+        <div className="flex flex-col gap-3 xl:items-end">
+          <div className="flex gap-2 rounded-[28px] border border-[var(--line)] bg-white/76 p-2 shadow-[0_18px_40px_rgba(21,28,35,0.06)]">
+            <Button asChild variant={view === "board" ? "primary" : "outline"}>
+              <Link href={buildViewHref("board", query)}>
+                <Columns3 className="size-4" />
+                Board
+              </Link>
+            </Button>
+            <Button asChild variant={view === "list" ? "primary" : "outline"}>
+              <Link href={buildViewHref("list", query)}>
+                <List className="size-4" />
+                Lista
+              </Link>
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="primary">
+              <Link href={"/app/work-orders/new" as Route}>
+                <FilePlus2 className="size-4" />
+                Crear orden manual
+              </Link>
+            </Button>
+            <div className="rounded-full bg-[rgba(249,115,22,0.1)] px-4 py-3 text-xs font-semibold text-[var(--primary-strong)]">
+              No necesitas presupuesto primero
+            </div>
+          </div>
         </div>
       </div>
 

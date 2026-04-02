@@ -1,12 +1,15 @@
 import type { ReactNode } from "react";
-import { CalendarDays, ClipboardList, MessageCircleMore, Send, SquarePen, Wrench } from "lucide-react";
+import type { Route } from "next";
+import Link from "next/link";
+import { CalendarDays, ClipboardList, FileText, MessageCircleMore, Send, SquarePen, Wrench } from "lucide-react";
 
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge";
 import { CreateFromQuoteButton } from "@/components/work-orders/create-from-quote-button";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getQuoteDetail, getQuoteEditHref, getQuoteStatusLabel } from "@/lib/data/quotes";
+import { getQuoteDetail, getQuoteDocumentHref, getQuoteEditHref, getQuoteStatusLabel } from "@/lib/data/quotes";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { formatCurrencyDisplay } from "@/lib/utils";
 
@@ -30,6 +33,25 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
         status={getQuoteStatusLabel(quote.status)}
         action={{ label: "Editar presupuesto", icon: <SquarePen className="size-4" />, href: getQuoteEditHref(quote.id) }}
       />
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button asChild variant="outline">
+          <Link href={getQuoteDocumentHref(quote.id)}>
+            <FileText className="size-4" />
+            PDF / Imprimir
+          </Link>
+        </Button>
+        {client ? (
+          <Button asChild variant="outline">
+            <Link href={`/app/clients/${client.id}` as Route}>Ver cliente</Link>
+          </Button>
+        ) : null}
+        {vehicle ? (
+          <Button asChild variant="outline">
+            <Link href={`/app/vehicles/${vehicle.id}` as Route}>Ver vehiculo</Link>
+          </Button>
+        ) : null}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Creado" value={new Date(quote.created_at).toLocaleDateString("es-VE")} />

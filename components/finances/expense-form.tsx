@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Receipt } from "lucide-react";
 
 import { createExpenseAction } from "@/app/actions/finances";
+import { UploadPicker } from "@/components/uploads/upload-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +39,7 @@ function toAmount(value?: string) {
 export function ExpenseForm({ initialValues, options, preferredCurrency }: ExpenseFormProps) {
   const router = useRouter();
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [assetUrls, setAssetUrls] = useState<string[]>(initialValues.assetUrls);
 
   const {
     register,
@@ -60,7 +62,10 @@ export function ExpenseForm({ initialValues, options, preferredCurrency }: Expen
   );
 
   const onSubmit = handleSubmit(async (values) => {
-    const result = await createExpenseAction(values);
+    const result = await createExpenseAction({
+      ...values,
+      assetUrls,
+    });
 
     if (!result.success) {
       setFormMessage(result.message);
@@ -145,6 +150,21 @@ export function ExpenseForm({ initialValues, options, preferredCurrency }: Expen
               }
             />
 
+            <UploadPicker
+              accept="image/jpeg,image/webp,image/png,application/pdf"
+              buttonLabel="Subir soporte"
+              canTakePhoto
+              cameraLabel="Tomar foto"
+              error={errors.assetUrls?.message}
+              helper="Opcional. Agrega factura, recibo, captura o evidencia del gasto."
+              label="Archivos del gasto"
+              maxFiles={8}
+              multiple
+              onChange={setAssetUrls}
+              scope="expense_asset"
+              values={assetUrls}
+            />
+
             {formMessage ? (
               <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[rgba(15,118,110,0.08)] px-4 py-3 text-sm text-[var(--secondary)]">
                 {formMessage}
@@ -182,6 +202,7 @@ export function ExpenseForm({ initialValues, options, preferredCurrency }: Expen
               value={expenseCategoryOptions.find((option) => option.value === category)?.label ?? category}
             />
             <SummaryRow label="Orden" value={selectedWorkOrder?.label ?? "Sin orden vinculada"} />
+            <SummaryRow label="Soportes" value={String(assetUrls.length)} />
           </CardContent>
         </Card>
 
@@ -191,6 +212,7 @@ export function ExpenseForm({ initialValues, options, preferredCurrency }: Expen
               "Puedes cargar gastos generales o amarrarlos a una orden especifica.",
               "El overview mensual usa estos gastos para dar una utilidad estimada simple.",
               "La categoria deja el dato legible sin convertirlo en plan contable.",
+              "Si tienes factura o foto del gasto, queda adjunta al registro.",
             ].map((item) => (
               <div key={item} className="flex gap-3 rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 text-sm leading-6">
                 <div className="text-[var(--primary-strong)]">
