@@ -21,10 +21,11 @@ export type WorkOrderRecord = {
     | "presupuesto_pendiente"
     | "diagnostico_pendiente"
     | "en_reparacion"
-    | "listo_para_entrega"
-    | "completada"
-    | "cancelada";
+      | "listo_para_entrega"
+      | "completada"
+      | "cancelada";
   promised_date: string | null;
+  completed_at: string | null;
   total_amount: number;
   bay_slot: number | null;
   assigned_mechanic_id: string | null;
@@ -217,6 +218,17 @@ function buildWorkOrderTitle(vehicle: VehicleLite | null, quote?: QuoteLite | nu
 
 function buildWorkOrderCode() {
   return `OT-${Date.now().toString().slice(-6)}`;
+}
+
+function buildCompletedAtValue(
+  status: WorkOrderRecord["status"],
+  existingCompletedAt?: string | null,
+) {
+  if (status === "completada") {
+    return existingCompletedAt ?? new Date().toISOString();
+  }
+
+  return null;
 }
 
 function normalizeWorkOrderRecord(record: WorkOrderRecord) {
@@ -676,17 +688,17 @@ export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrde
   const { workshop, vehicle, quote, mechanic } = await validateWorkOrderRelations(input);
   const supabase = await createSupabaseDataClient();
 
-  let existingWorkOrder: Pick<WorkOrderRecord, "status" | "code"> | null = null;
+  let existingWorkOrder: Pick<WorkOrderRecord, "status" | "code" | "completed_at"> | null = null;
 
   if (workOrderId) {
     const { data } = await supabase
       .from("work_orders")
-      .select("status,code")
+      .select("status,code,completed_at")
       .eq("workshop_id", workshop.id)
       .eq("id", workOrderId)
       .maybeSingle();
 
-    existingWorkOrder = (data as Pick<WorkOrderRecord, "status" | "code"> | null) ?? null;
+    existingWorkOrder = (data as Pick<WorkOrderRecord, "status" | "code" | "completed_at"> | null) ?? null;
   }
 
   const payload = {
@@ -701,6 +713,7 @@ export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrde
       [vehicle.make, vehicle.model, vehicle.vehicle_year, vehicle.plate].filter(Boolean).join(" "),
     status: input.status,
     promised_date: input.promisedDate ?? null,
+    completed_at: buildCompletedAtValue(input.status, existingWorkOrder?.completed_at),
     total_amount: input.total,
     assigned_mechanic_id: mechanic?.id ?? null,
     assigned_mechanic_name: mechanic?.full_name ?? null,
@@ -757,7 +770,10 @@ export async function updateWorkOrderStatus(workOrderId: string, status: WorkOrd
 
   const { data, error } = await supabase
     .from("work_orders")
-    .update({ status })
+    .update({
+      status,
+      completed_at: buildCompletedAtValue(status, existing.completed_at),
+    })
     .eq("id", workOrderId)
     .eq("workshop_id", workshop.id)
     .select("*")
@@ -846,6 +862,7 @@ export async function createWorkOrderFromApprovedQuote(quoteId: string) {
       [vehicle.make, vehicle.model, vehicle.vehicle_year, vehicle.plate].filter(Boolean).join(" "),
     status: "diagnostico_pendiente" as const,
     promised_date: null,
+    completed_at: null,
     total_amount: Number(quote.total_amount ?? 0),
     assigned_mechanic_id: null,
     assigned_mechanic_name: null,
