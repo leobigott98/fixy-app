@@ -37,6 +37,7 @@ export default async function NewVehiclePage({ searchParams }: NewVehiclePagePro
     mileage: "",
     vin: "",
     notes: "",
+    photoUrls: [],
   };
 
   return (

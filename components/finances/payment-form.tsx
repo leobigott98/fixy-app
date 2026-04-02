@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Wallet } from "lucide-react";
 
 import { recordPaymentAction } from "@/app/actions/finances";
+import { UploadPicker } from "@/components/uploads/upload-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,7 @@ function toAmount(value?: string) {
 export function PaymentForm({ initialValues, options, preferredCurrency }: PaymentFormProps) {
   const router = useRouter();
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [proofUrls, setProofUrls] = useState<string[]>(initialValues.proofUrl ? [initialValues.proofUrl] : []);
 
   const {
     register,
@@ -60,6 +62,7 @@ export function PaymentForm({ initialValues, options, preferredCurrency }: Payme
   const amountValue = useWatch({ control, name: "amount" });
   const status = useWatch({ control, name: "status" });
   const method = useWatch({ control, name: "method" });
+  const proofUrl = proofUrls[0] ?? "";
 
   const workOrderOptions = useMemo(
     () => options.workOrders.filter((workOrder) => !clientId || workOrder.clientId === clientId),
@@ -93,7 +96,10 @@ export function PaymentForm({ initialValues, options, preferredCurrency }: Payme
   );
 
   const onSubmit = handleSubmit(async (values) => {
-    const result = await recordPaymentAction(values);
+    const result = await recordPaymentAction({
+      ...values,
+      proofUrl,
+    });
 
     if (!result.success) {
       setFormMessage(result.message);
@@ -205,6 +211,20 @@ export function PaymentForm({ initialValues, options, preferredCurrency }: Payme
               }
             />
 
+            <UploadPicker
+              accept="image/jpeg,image/webp,application/pdf"
+              buttonLabel="Subir comprobante"
+              canTakePhoto
+              cameraLabel="Tomar foto"
+              error={errors.proofUrl?.message}
+              helper="Opcional. Puedes subir un PDF o una foto del comprobante."
+              label="Comprobante de pago"
+              maxFiles={1}
+              onChange={setProofUrls}
+              scope="payment_proof"
+              values={proofUrls}
+            />
+
             {formMessage ? (
               <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[rgba(15,118,110,0.08)] px-4 py-3 text-sm text-[var(--secondary)]">
                 {formMessage}
@@ -243,6 +263,7 @@ export function PaymentForm({ initialValues, options, preferredCurrency }: Payme
             />
             <SummaryRow label="Estado" value={paymentStatusOptions.find((option) => option.value === status)?.label ?? status} />
             <SummaryRow label="Metodo" value={paymentMethodOptions.find((option) => option.value === method)?.label ?? method} />
+            <SummaryRow label="Comprobante" value={proofUrl ? "Cargado" : "Opcional"} />
           </CardContent>
         </Card>
 

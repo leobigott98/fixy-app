@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CarFront, ContactRound, History, Wrench } from "lucide-react";
 
 import { saveVehicleAction } from "@/app/actions/vehicles";
+import { UploadPicker } from "@/components/uploads/upload-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +39,7 @@ export function VehicleForm({
 }: VehicleFormProps) {
   const router = useRouter();
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<string[]>(initialValues.photoUrls);
 
   const {
     register,
@@ -58,7 +60,13 @@ export function VehicleForm({
   const selectedOwner = clientOptions.find((client) => client.id === clientId);
 
   const onSubmit = handleSubmit(async (values) => {
-    const result = await saveVehicleAction(values, vehicleId);
+    const result = await saveVehicleAction(
+      {
+        ...values,
+        photoUrls,
+      },
+      vehicleId,
+    );
 
     if (!result.success) {
       setFormMessage(result.message);
@@ -159,6 +167,21 @@ export function VehicleForm({
               }
             />
 
+            <UploadPicker
+              accept="image/jpeg,image/webp"
+              buttonLabel="Subir fotos"
+              canTakePhoto
+              cameraLabel="Tomar foto"
+              error={errors.photoUrls?.message}
+              helper="Opcional. Agrega varias fotos del vehiculo para recepcion y seguimiento."
+              label="Fotos del vehiculo"
+              maxFiles={12}
+              multiple
+              onChange={setPhotoUrls}
+              scope="vehicle_photo"
+              values={photoUrls}
+            />
+
             {formMessage ? (
               <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[rgba(15,118,110,0.08)] px-4 py-3 text-sm text-[var(--secondary)]">
                 {formMessage}
@@ -193,6 +216,7 @@ export function VehicleForm({
               ["Propietario", selectedOwner?.fullName || "Pendiente"],
               ["Presupuestos", "Se conectan desde el proximo sprint"],
               ["Ordenes", "Quedaran visibles por vehiculo"],
+              ["Fotos", photoUrls.length ? `${photoUrls.length} cargadas` : "Opcionales"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-2xl bg-white/8 p-4">
                 <div className="text-sm text-white/64">{label}</div>
@@ -202,8 +226,8 @@ export function VehicleForm({
           </CardContent>
         </Card>
 
-        <Card className="bg-white/86">
-          <CardContent className="space-y-3 px-5 py-5">
+      <Card className="bg-white/86">
+        <CardContent className="space-y-3 px-5 py-5">
             {[
               {
                 icon: <ContactRound className="size-4" />,
@@ -216,6 +240,10 @@ export function VehicleForm({
               {
                 icon: <History className="size-4" />,
                 text: "El historial de reparaciones se podra montar sin rehacer esta ficha.",
+              },
+              {
+                icon: <CarFront className="size-4" />,
+                text: "Las fotos ayudan a recepcion, aprobaciones y contexto tecnico.",
               },
             ].map((item) => (
               <div key={item.text} className="flex gap-3 rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 text-sm leading-6">

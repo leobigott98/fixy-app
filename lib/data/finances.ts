@@ -47,6 +47,7 @@ export type PaymentRecord = {
   method: PaymentMethod;
   paid_at: string;
   notes: string | null;
+  proof_url: string | null;
   created_at: string;
 };
 
@@ -466,6 +467,7 @@ export async function recordPayment(values: PaymentFormValues) {
     method: input.method,
     paid_at: new Date(`${input.date}T12:00:00.000Z`).toISOString(),
     notes: input.notes,
+    proof_url: input.proofUrl,
   };
 
   const { data, error } = await supabase.from("payments").insert(payload).select("*").single();

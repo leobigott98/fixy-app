@@ -193,6 +193,16 @@ export default async function FinancesPage({ searchParams }: FinancesPageProps) 
                       {item.payment.notes ? (
                         <div className="mt-2 text-sm text-[var(--muted)]">{item.payment.notes}</div>
                       ) : null}
+                      {item.payment.proof_url ? (
+                        <a
+                          className="mt-2 inline-flex text-sm font-medium text-[var(--primary-strong)] underline-offset-4 hover:underline"
+                          href={item.payment.proof_url}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          Ver comprobante
+                        </a>
+                      ) : null}
                     </div>
                     <div className="text-left sm:text-right">
                       <div className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">

@@ -22,6 +22,7 @@ export default async function EditWorkOrderPage({ params }: EditWorkOrderPagePro
     workOrder: detail.workOrder,
     services: detail.services,
     parts: detail.parts,
+    referencePhotos: detail.referencePhotos,
   });
 
   return (

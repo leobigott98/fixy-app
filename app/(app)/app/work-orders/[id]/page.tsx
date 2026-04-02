@@ -214,6 +214,34 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
         />
       </div>
 
+      <Card className="bg-white/86">
+        <CardHeader>
+          <CardTitle>Fotos de referencia</CardTitle>
+          <CardDescription>
+            Evidencia visual del estado del vehiculo, piezas o hallazgos del trabajo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {detail.referencePhotos.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+              {detail.referencePhotos.map((photo) => (
+                <a key={photo.id} href={photo.photo_url} rel="noreferrer" target="_blank">
+                  <img
+                    alt="Referencia de la orden"
+                    className="h-28 w-full rounded-2xl object-cover"
+                    src={photo.photo_url}
+                  />
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[rgba(249,115,22,0.04)] p-4 text-sm leading-6 text-[var(--muted)]">
+              Todavia no hay fotos de referencia en esta orden.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <Card className="bg-white/86">
           <CardHeader>

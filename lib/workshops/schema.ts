@@ -19,7 +19,7 @@ export const workshopProfileSchema = z.object({
   logoUrl: z
     .string()
     .trim()
-    .refine((value) => value.length === 0 || /^https?:\/\//.test(value), "Usa una URL valida."),
+    .refine((value) => value.length === 0 || /^https?:\/\//.test(value), "Sube un logo valido."),
   currencyDisplay: z.enum(currencyDisplayValues, "Selecciona una moneda."),
 });
 

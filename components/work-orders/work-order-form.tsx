@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarDays, Plus, Trash2, UserRound, Wrench } from "lucide-react";
 
 import { saveWorkOrderAction } from "@/app/actions/work-orders";
+import { UploadPicker } from "@/components/uploads/upload-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,9 @@ export function WorkOrderForm({
 }: WorkOrderFormProps) {
   const router = useRouter();
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [referencePhotoUrls, setReferencePhotoUrls] = useState<string[]>(
+    initialValues.referencePhotoUrls,
+  );
 
   const {
     register,
@@ -147,7 +151,13 @@ export function WorkOrderForm({
   }, [partItems, serviceItems]);
 
   const onSubmit = handleSubmit(async (values) => {
-    const result = await saveWorkOrderAction(values, workOrderId);
+    const result = await saveWorkOrderAction(
+      {
+        ...values,
+        referencePhotoUrls,
+      },
+      workOrderId,
+    );
 
     if (!result.success) {
       setFormMessage(result.message);
@@ -292,6 +302,21 @@ export function WorkOrderForm({
               }
             />
 
+            <UploadPicker
+              accept="image/jpeg,image/webp"
+              buttonLabel="Subir referencias"
+              canTakePhoto
+              cameraLabel="Tomar foto"
+              error={errors.referencePhotoUrls?.message}
+              helper="Opcional. Agrega fotos del estado del vehiculo, piezas o hallazgos."
+              label="Fotos de referencia"
+              maxFiles={12}
+              multiple
+              onChange={setReferencePhotoUrls}
+              scope="work_order_reference"
+              values={referencePhotoUrls}
+            />
+
             {formMessage ? (
               <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[rgba(15,118,110,0.08)] px-4 py-3 text-sm text-[var(--secondary)]">
                 {formMessage}
@@ -322,6 +347,7 @@ export function WorkOrderForm({
           <CardContent className="space-y-3">
             <SummaryRow label="Servicios" value={String(serviceItems.length)} />
             <SummaryRow label="Repuestos" value={String(partItems.length)} />
+            <SummaryRow label="Referencias" value={String(referencePhotoUrls.length)} />
             <SummaryRow label="Promesa" value={useWatch({ control, name: "promisedDate" }) || "Sin fecha"} />
             <div className="rounded-2xl bg-white/10 p-4">
               <div className="text-sm text-white/64">Total estimado</div>

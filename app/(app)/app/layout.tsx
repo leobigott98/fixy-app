@@ -15,6 +15,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
   return (
     <ProtectedAppShell
       role={session.user.role}
+      workshopLogoUrl={workshop?.logo_url ?? undefined}
       userName={workshop?.owner_name ?? session.user.name}
       workshopName={workshop?.workshop_name}
     >

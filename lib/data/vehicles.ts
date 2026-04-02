@@ -22,6 +22,15 @@ export type VehicleRecord = {
   updated_at: string;
 };
 
+export type VehiclePhotoRecord = {
+  id: string;
+  vehicle_id: string;
+  workshop_id: string;
+  photo_url: string;
+  sort_order: number;
+  created_at: string;
+};
+
 type ClientLite = {
   id: string;
   full_name: string;
@@ -58,7 +67,42 @@ export type VehicleDetailData = {
   owner: ClientLite | null;
   quotes: QuoteLiteRow[];
   workOrders: WorkOrderLiteRow[];
+  photos: VehiclePhotoRecord[];
 };
+
+async function replaceVehiclePhotos(
+  vehicleId: string,
+  workshopId: string,
+  photoUrls: string[],
+) {
+  const supabase = await createSupabaseDataClient();
+  const { error: deleteError } = await supabase
+    .from("vehicle_photos")
+    .delete()
+    .eq("vehicle_id", vehicleId)
+    .eq("workshop_id", workshopId);
+
+  if (deleteError && !isMissingRelationError(deleteError)) {
+    throw deleteError;
+  }
+
+  if (!photoUrls.length) {
+    return;
+  }
+
+  const { error } = await supabase.from("vehicle_photos").insert(
+    photoUrls.map((photoUrl, index) => ({
+      vehicle_id: vehicleId,
+      workshop_id: workshopId,
+      photo_url: photoUrl,
+      sort_order: index,
+    })),
+  );
+
+  if (error) {
+    throw error;
+  }
+}
 
 export async function getVehicleOwnerOptions() {
   const workshop = await requireCurrentWorkshop();
@@ -201,7 +245,7 @@ export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetail
     notFound();
   }
 
-  const [quotesResult, workOrdersResult] = await Promise.all([
+  const [quotesResult, workOrdersResult, photosResult] = await Promise.all([
     supabase
       .from("quotes")
       .select("id,vehicle_id,title,status,total_amount,created_at")
@@ -216,9 +260,15 @@ export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetail
       .eq("vehicle_id", vehicleId)
       .order("updated_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("vehicle_photos")
+      .select("*")
+      .eq("workshop_id", workshop.id)
+      .eq("vehicle_id", vehicleId)
+      .order("sort_order"),
   ]);
 
-  const nonMissingError = [quotesResult.error, workOrdersResult.error].find(
+  const nonMissingError = [quotesResult.error, workOrdersResult.error, photosResult.error].find(
     (error) => error && !isMissingRelationError(error),
   );
 
@@ -231,13 +281,12 @@ export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetail
     owner: Array.isArray(vehicleRow.clients) ? vehicleRow.clients[0] ?? null : vehicleRow.clients,
     quotes: (quotesResult.data as QuoteLiteRow[] | null) ?? [],
     workOrders: (workOrdersResult.data as WorkOrderLiteRow[] | null) ?? [],
+    photos: (photosResult.data as VehiclePhotoRecord[] | null) ?? [],
   };
 }
 
 export async function getVehicleForEdit(vehicleId: string) {
-  const detail = await getVehicleDetail(vehicleId);
-
-  return detail.vehicle;
+  return getVehicleDetail(vehicleId);
 }
 
 export async function upsertVehicle(input: VehicleProfileInput, vehicleId?: string) {
@@ -268,7 +317,10 @@ export async function upsertVehicle(input: VehicleProfileInput, vehicleId?: stri
     throw error;
   }
 
-  return data as VehicleRecord;
+  const vehicle = data as VehicleRecord;
+  await replaceVehiclePhotos(vehicle.id, workshop.id, input.photoUrls);
+
+  return vehicle;
 }
 
 export function getVehicleDetailHref(vehicleId: string) {

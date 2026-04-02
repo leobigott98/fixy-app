@@ -20,6 +20,7 @@ export const vehicleProfileFormSchema = z.object({
     .refine((value) => value.length === 0 || /^\d+$/.test(value), "Ingresa un kilometraje valido."),
   vin: z.string().trim(),
   notes: z.string().trim(),
+  photoUrls: z.array(z.string().url("Sube fotos validas.")).max(12, "Maximo 12 fotos."),
 });
 
 export type VehicleProfileFormValues = z.infer<typeof vehicleProfileFormSchema>;
@@ -34,6 +35,7 @@ export type VehicleProfileInput = {
   mileage?: number;
   vin: string;
   notes: string;
+  photoUrls: string[];
 };
 
 export function normalizeVehicleProfileInput(values: VehicleProfileFormValues): VehicleProfileInput {
@@ -47,6 +49,7 @@ export function normalizeVehicleProfileInput(values: VehicleProfileFormValues): 
     mileage: values.mileage ? Number(values.mileage) : undefined,
     vin: values.vin,
     notes: values.notes,
+    photoUrls: values.photoUrls,
   };
 }
 

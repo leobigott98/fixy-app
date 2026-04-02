@@ -8,7 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { primaryNavigation } from "@/lib/navigation";
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  workshopName?: string;
+  workshopLogoUrl?: string;
+};
+
+export function AppSidebar({ workshopName, workshopLogoUrl }: AppSidebarProps) {
   const pathname = usePathname();
   return (
     <aside className="fixy-shell hidden w-[280px] shrink-0 border-r border-[var(--line)] px-5 py-6 lg:flex lg:flex-col">
@@ -39,13 +44,28 @@ export function AppSidebar() {
 
       <div className="mt-auto rounded-[28px] bg-[var(--surface-dark)] p-5 text-white">
         <Badge variant="dark">Taller activo</Badge>
-        <div className="mt-4 space-y-2">
-          <div className="font-[family-name:var(--font-heading)] text-xl font-bold tracking-tight">
-            Fixy Garage
+        <div className="mt-4 flex items-center gap-4">
+          <div className="flex size-14 items-center justify-center overflow-hidden rounded-[20px] bg-white/10">
+            {workshopLogoUrl ? (
+              <img
+                alt={workshopName || "Logo del taller"}
+                className="size-full object-cover"
+                src={workshopLogoUrl}
+              />
+            ) : (
+              <div className="font-[family-name:var(--font-heading)] text-lg font-bold tracking-tight text-white">
+                {workshopName?.slice(0, 1) || "F"}
+              </div>
+            )}
           </div>
-          <p className="text-sm leading-6 text-white/70">
-            Shell operativa lista para dashboard, presupuestos, ordenes y seguimiento visual.
-          </p>
+          <div className="space-y-2">
+            <div className="font-[family-name:var(--font-heading)] text-xl font-bold tracking-tight">
+              {workshopName || "Configura tu taller"}
+            </div>
+            <p className="text-sm leading-6 text-white/70">
+              Shell operativa lista para dashboard, presupuestos, ordenes y seguimiento visual.
+            </p>
+          </div>
         </div>
       </div>
     </aside>

@@ -12,6 +12,7 @@ type ProtectedAppShellProps = {
   userName: string;
   role: string;
   workshopName?: string;
+  workshopLogoUrl?: string;
 };
 
 export function ProtectedAppShell({
@@ -19,6 +20,7 @@ export function ProtectedAppShell({
   userName,
   role,
   workshopName,
+  workshopLogoUrl,
 }: ProtectedAppShellProps) {
   const pathname = usePathname();
   const isOnboardingRoute = pathname === "/app/onboarding";
@@ -33,10 +35,11 @@ export function ProtectedAppShell({
 
   return (
     <div className="min-h-screen lg:flex">
-      <AppSidebar />
+      <AppSidebar workshopLogoUrl={workshopLogoUrl} workshopName={workshopName} />
       <div className="flex min-h-screen flex-1 flex-col px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-8 lg:pt-6">
         <AppTopbar
           role={role}
+          workshopLogoUrl={workshopLogoUrl}
           userName={userName}
           workshopName={workshopName ?? "Configura tu taller"}
         />

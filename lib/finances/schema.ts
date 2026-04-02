@@ -31,6 +31,10 @@ export const paymentFormSchema = z.object({
   method: z.enum(paymentMethodOptions.map((option) => option.value) as [PaymentMethod, ...PaymentMethod[]]),
   date: z.string().min(1, "Selecciona la fecha."),
   notes: z.string().max(500, "Usa una nota mas corta."),
+  proofUrl: z
+    .string()
+    .trim()
+    .refine((value) => value.length === 0 || /^https?:\/\//.test(value), "Sube un comprobante valido."),
 });
 
 export type PaymentFormValues = {
@@ -41,6 +45,7 @@ export type PaymentFormValues = {
   method: PaymentMethod;
   date: string;
   notes: string;
+  proofUrl: string;
 };
 
 export type PaymentInput = {
@@ -51,6 +56,7 @@ export type PaymentInput = {
   method: PaymentMethod;
   date: string;
   notes: string | null;
+  proofUrl: string | null;
 };
 
 export function normalizePaymentInput(values: PaymentFormValues): PaymentInput {
@@ -62,6 +68,7 @@ export function normalizePaymentInput(values: PaymentFormValues): PaymentInput {
     method: values.method,
     date: values.date,
     notes: values.notes?.trim() ? values.notes.trim() : null,
+    proofUrl: values.proofUrl?.trim() ? values.proofUrl.trim() : null,
   };
 }
 
@@ -77,6 +84,7 @@ export function buildPaymentFormDefaults(source?: {
     method: "pago_movil" as PaymentMethod,
     date: todayValue(),
     notes: "",
+    proofUrl: "",
   } satisfies PaymentFormValues;
 }
 

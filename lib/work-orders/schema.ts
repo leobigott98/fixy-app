@@ -28,6 +28,7 @@ export const workOrderFormSchema = z.object({
   assignedMechanicName: z.string().trim(),
   promisedDate: z.string().trim(),
   notes: z.string().trim(),
+  referencePhotoUrls: z.array(z.string().url("Sube referencias validas.")).max(12, "Maximo 12 fotos."),
   serviceItems: z.array(workOrderItemFormSchema),
   partItems: z.array(workOrderItemFormSchema),
 });
@@ -59,6 +60,7 @@ export type WorkOrderInput = {
   assignedMechanicName: string;
   promisedDate?: string;
   notes: string;
+  referencePhotoUrls: string[];
   serviceItems: WorkOrderItemInput[];
   partItems: WorkOrderItemInput[];
   total: number;
@@ -105,6 +107,7 @@ export function normalizeWorkOrderInput(values: WorkOrderFormValues): WorkOrderI
     assignedMechanicName: values.assignedMechanicName,
     promisedDate: values.promisedDate || undefined,
     notes: values.notes,
+    referencePhotoUrls: values.referencePhotoUrls,
     serviceItems,
     partItems,
     total: calculateWorkOrderTotal(serviceItems, partItems),

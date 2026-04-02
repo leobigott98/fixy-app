@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Camera, CheckCircle2, Clock3, Store } from "lucide-react";
 
 import { saveWorkshopProfileAction } from "@/app/actions/workshops";
+import { UploadPicker } from "@/components/uploads/upload-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,9 @@ type WorkshopProfileFormProps = {
 export function WorkshopProfileForm({ mode, initialValues }: WorkshopProfileFormProps) {
   const router = useRouter();
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [logoUrls, setLogoUrls] = useState<string[]>(
+    initialValues.logoUrl ? [initialValues.logoUrl] : [],
+  );
 
   const {
     register,
@@ -35,12 +39,15 @@ export function WorkshopProfileForm({ mode, initialValues }: WorkshopProfileForm
     defaultValues: initialValues,
   });
 
-  const logoUrl = watch("logoUrl");
   const workshopName = watch("workshopName");
   const bayCount = watch("bayCount");
+  const logoUrl = logoUrls[0] ?? "";
 
   const onSubmit = handleSubmit(async (values) => {
-    const result = await saveWorkshopProfileAction(values);
+    const result = await saveWorkshopProfileAction({
+      ...values,
+      logoUrl,
+    });
 
     if (!result.success) {
       setFormMessage(result.message);
@@ -173,12 +180,19 @@ export function WorkshopProfileForm({ mode, initialValues }: WorkshopProfileForm
                   />
                 }
               />
-              <Field
-                label="Logo URL opcional"
-                error={errors.logoUrl?.message}
-                input={<Input placeholder="https://..." {...register("logoUrl")} />}
-              />
             </div>
+
+            <UploadPicker
+              accept="image/jpeg,image/png,image/webp,image/svg+xml"
+              buttonLabel="Subir logo"
+              error={errors.logoUrl?.message}
+              helper="Opcional. Formatos permitidos: JPG, JPEG, PNG, WEBP o SVG."
+              label="Logo del taller"
+              maxFiles={1}
+              onChange={setLogoUrls}
+              scope="workshop_logo"
+              values={logoUrls}
+            />
 
             {formMessage ? (
               <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[rgba(15,118,110,0.08)] px-4 py-3 text-sm text-[var(--secondary)]">

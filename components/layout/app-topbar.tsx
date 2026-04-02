@@ -8,9 +8,10 @@ type AppTopbarProps = {
   userName: string;
   role: string;
   workshopName: string;
+  workshopLogoUrl?: string;
 };
 
-export function AppTopbar({ userName, role, workshopName }: AppTopbarProps) {
+export function AppTopbar({ userName, role, workshopName, workshopLogoUrl }: AppTopbarProps) {
   return (
     <div className="flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/72 p-4 shadow-[0_18px_40px_rgba(21,28,35,0.07)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
       <div className="space-y-2">
@@ -18,12 +19,27 @@ export function AppTopbar({ userName, role, workshopName }: AppTopbarProps) {
           <Badge variant="success">Taller en marcha</Badge>
           <Badge>{role}</Badge>
         </div>
-        <div>
-          <div className="font-[family-name:var(--font-heading)] text-xl font-bold tracking-tight">
-            {workshopName}
+        <div className="flex items-center gap-3">
+          <div className="flex size-12 items-center justify-center overflow-hidden rounded-2xl bg-[rgba(249,115,22,0.12)] text-[var(--primary-strong)]">
+            {workshopLogoUrl ? (
+              <img
+                alt={workshopName}
+                className="size-full object-cover"
+                src={workshopLogoUrl}
+              />
+            ) : (
+              <span className="font-[family-name:var(--font-heading)] text-lg font-bold">
+                {workshopName.slice(0, 1)}
+              </span>
+            )}
           </div>
-          <div className="text-sm text-[var(--muted)]">
-            Hola, {userName}. Base lista para operar desde movil y escritorio.
+          <div>
+            <div className="font-[family-name:var(--font-heading)] text-xl font-bold tracking-tight">
+              {workshopName}
+            </div>
+            <div className="text-sm text-[var(--muted)]">
+              Hola, {userName}. Base lista para operar desde movil y escritorio.
+            </div>
           </div>
         </div>
       </div>

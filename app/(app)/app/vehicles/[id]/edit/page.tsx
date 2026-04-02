@@ -11,7 +11,8 @@ type EditVehiclePageProps = {
 
 export default async function EditVehiclePage({ params }: EditVehiclePageProps) {
   const { id } = await params;
-  const [vehicle, clientOptions] = await Promise.all([getVehicleForEdit(id), getVehicleOwnerOptions()]);
+  const [detail, clientOptions] = await Promise.all([getVehicleForEdit(id), getVehicleOwnerOptions()]);
+  const { vehicle, photos } = detail;
 
   const initialValues: VehicleProfileFormValues = {
     clientId: vehicle.client_id ?? "",
@@ -23,6 +24,7 @@ export default async function EditVehiclePage({ params }: EditVehiclePageProps) 
     mileage: vehicle.mileage ? String(vehicle.mileage) : "",
     vin: vehicle.vin ?? "",
     notes: vehicle.notes ?? "",
+    photoUrls: photos.map((photo) => photo.photo_url),
   };
 
   return (

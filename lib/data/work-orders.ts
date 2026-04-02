@@ -46,6 +46,15 @@ export type WorkOrderServiceRecord = {
 
 export type WorkOrderPartRecord = WorkOrderServiceRecord;
 
+export type WorkOrderReferencePhotoRecord = {
+  id: string;
+  work_order_id: string;
+  workshop_id: string;
+  photo_url: string;
+  sort_order: number;
+  created_at: string;
+};
+
 export type WorkOrderStatusHistoryRecord = {
   id: string;
   work_order_id: string;
@@ -111,6 +120,7 @@ export type WorkOrderDetailData = {
   quote: QuoteLite | null;
   services: WorkOrderServiceRecord[];
   parts: WorkOrderPartRecord[];
+  referencePhotos: WorkOrderReferencePhotoRecord[];
   statusHistory: WorkOrderStatusHistoryRecord[];
   paymentSummary: {
     totalCollected: number;
@@ -335,6 +345,40 @@ async function replaceWorkOrderItems(
   }
 }
 
+async function replaceReferencePhotos(
+  workOrderId: string,
+  workshopId: string,
+  photoUrls: string[],
+) {
+  const supabase = await createSupabaseDataClient();
+  const { error: deleteError } = await supabase
+    .from("work_order_reference_photos")
+    .delete()
+    .eq("work_order_id", workOrderId)
+    .eq("workshop_id", workshopId);
+
+  if (deleteError && !isMissingRelationError(deleteError)) {
+    throw deleteError;
+  }
+
+  if (!photoUrls.length) {
+    return;
+  }
+
+  const { error } = await supabase.from("work_order_reference_photos").insert(
+    photoUrls.map((photoUrl, index) => ({
+      work_order_id: workOrderId,
+      workshop_id: workshopId,
+      photo_url: photoUrl,
+      sort_order: index,
+    })),
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
@@ -531,9 +575,15 @@ export async function getWorkOrderDetail(workOrderId: string): Promise<WorkOrder
     notFound();
   }
 
-  const [servicesResult, partsResult, statusHistoryResult, paymentsResult] = await Promise.all([
+  const [servicesResult, partsResult, referencePhotosResult, statusHistoryResult, paymentsResult] = await Promise.all([
     supabase.from("work_order_services").select("*").eq("workshop_id", workshop.id).eq("work_order_id", workOrderId).order("sort_order"),
     supabase.from("work_order_parts").select("*").eq("workshop_id", workshop.id).eq("work_order_id", workOrderId).order("sort_order"),
+    supabase
+      .from("work_order_reference_photos")
+      .select("*")
+      .eq("workshop_id", workshop.id)
+      .eq("work_order_id", workOrderId)
+      .order("sort_order"),
     supabase
       .from("work_order_status_history")
       .select("*")
@@ -543,7 +593,7 @@ export async function getWorkOrderDetail(workOrderId: string): Promise<WorkOrder
     supabase.from("payments").select("amount,status").eq("workshop_id", workshop.id).eq("work_order_id", workOrderId),
   ]);
 
-  const nonMissingError = [servicesResult.error, partsResult.error, statusHistoryResult.error, paymentsResult.error].find(
+  const nonMissingError = [servicesResult.error, partsResult.error, referencePhotosResult.error, statusHistoryResult.error, paymentsResult.error].find(
     (error) => error && !isMissingRelationError(error),
   );
 
@@ -573,6 +623,7 @@ export async function getWorkOrderDetail(workOrderId: string): Promise<WorkOrder
       unit_price: Number(item.unit_price ?? 0),
       line_total: Number(item.line_total ?? 0),
     })),
+    referencePhotos: (referencePhotosResult.data as WorkOrderReferencePhotoRecord[] | null) ?? [],
     statusHistory: (statusHistoryResult.data as WorkOrderStatusHistoryRecord[] | null) ?? [],
     paymentSummary: {
       paymentCount: payments.length,
@@ -633,6 +684,7 @@ export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrde
 
   const workOrder = normalizeWorkOrderRecord(data as WorkOrderRecord);
   await replaceWorkOrderItems(workOrder.id, workshop.id, input.serviceItems, input.partItems);
+  await replaceReferencePhotos(workOrder.id, workshop.id, input.referencePhotoUrls);
 
   if (!workOrderId) {
     await insertStatusHistory(workOrder.id, workshop.id, null, input.status, "Orden creada");
@@ -826,6 +878,7 @@ export function buildWorkOrderFormDefaults(
     workOrder?: WorkOrderRecord;
     services?: WorkOrderServiceRecord[];
     parts?: WorkOrderPartRecord[];
+    referencePhotos?: WorkOrderReferencePhotoRecord[];
     selectedClientId?: string;
     selectedVehicleId?: string;
     selectedQuoteId?: string;
@@ -847,6 +900,7 @@ export function buildWorkOrderFormDefaults(
     assignedMechanicName: source?.workOrder?.assigned_mechanic_name ?? "",
     promisedDate: source?.workOrder?.promised_date ?? "",
     notes: source?.workOrder?.notes ?? "",
+    referencePhotoUrls: source?.referencePhotos?.map((photo) => photo.photo_url) ?? [],
     serviceItems:
       source?.services?.map((item) => ({
         rowId: item.id,

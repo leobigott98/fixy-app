@@ -53,7 +53,7 @@ function formatWorkOrderStatus(status: string) {
 export default async function VehicleDetailPage({ params }: VehicleDetailPageProps) {
   const { id } = await params;
   const detail = await getVehicleDetail(id);
-  const { vehicle, owner, quotes, workOrders } = detail;
+  const { vehicle, owner, quotes, workOrders, photos } = detail;
 
   return (
     <div className="space-y-6">
@@ -124,6 +124,7 @@ export default async function VehicleDetailPage({ params }: VehicleDetailPagePro
                 {vehicle.notes || "Sin notas tecnicas todavia."}
               </div>
             </div>
+            <PhotoGallery photos={photos.map((photo) => photo.photo_url)} />
           </CardContent>
         </Card>
 
@@ -228,5 +229,32 @@ function LinkedActivityCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function PhotoGallery({ photos }: { photos: string[] }) {
+  if (!photos.length) {
+    return (
+      <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[rgba(249,115,22,0.04)] p-4 text-sm leading-6 text-[var(--muted)]">
+        Todavia no hay fotos del vehiculo.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-sm font-medium text-[var(--foreground)]">Fotos</div>
+      <div className="grid grid-cols-2 gap-3">
+        {photos.map((photo) => (
+          <a key={photo} href={photo} rel="noreferrer" target="_blank">
+            <img
+              alt="Foto del vehiculo"
+              className="h-28 w-full rounded-2xl object-cover"
+              src={photo}
+            />
+          </a>
+        ))}
+      </div>
+    </div>
   );
 }
