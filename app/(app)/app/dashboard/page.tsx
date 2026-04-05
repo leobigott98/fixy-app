@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { ArrowUpRight, ClipboardList, Coins, ContactRound, Wrench } from "lucide-react";
+import { ArrowUpRight, Bell, ClipboardList, Coins, ContactRound, Wrench } from "lucide-react";
 
 import { DonutChartCard, BarChartCard, LineChartCard } from "@/components/dashboard/charts";
 import { EmptyStateCard } from "@/components/dashboard/empty-state-card";
@@ -9,12 +9,14 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getWorkshopNotificationCount } from "@/lib/data/marketplace";
 import { getDashboardStats, requireCurrentWorkshop } from "@/lib/data/workshops";
 import { formatCurrencyDisplay } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const workshop = await requireCurrentWorkshop();
   const stats = await getDashboardStats(workshop.id);
+  const notificationCount = await getWorkshopNotificationCount(workshop.id);
   const availableSpaces = Math.max(workshop.bay_count - stats.activeWorkOrders, 0);
 
   const quickActions: Array<{
@@ -161,6 +163,42 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="bg-white/86">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle>Solicitudes nuevas</CardTitle>
+              <CardDescription>
+                Leads que llegaron desde el directorio publico y necesitan respuesta.
+              </CardDescription>
+            </div>
+            <Badge variant={notificationCount > 0 ? "primary" : "success"}>
+              {notificationCount > 0 ? `${notificationCount} nuevas` : "Al dia"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] px-4 py-4">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-[rgba(249,115,22,0.12)] text-[var(--primary-strong)]">
+              <Bell className="size-5" />
+            </div>
+            <div>
+              <div className="font-medium">
+                {notificationCount > 0
+                  ? `Tienes ${notificationCount} solicitud${notificationCount === 1 ? "" : "es"} pendiente${notificationCount === 1 ? "" : "s"}`
+                  : "No hay solicitudes pendientes ahora mismo"}
+              </div>
+              <div className="text-sm text-[var(--muted)]">
+                Las consultas del marketplace ya aparecen dentro del taller con acceso directo a llamada y WhatsApp.
+              </div>
+            </div>
+          </div>
+          <Button asChild variant="primary">
+            <Link href={"/app/notifications" as Route}>Abrir solicitudes</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <DonutChartCard

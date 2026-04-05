@@ -6,7 +6,11 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { mobileNavigation } from "@/lib/navigation";
 
-export function MobileNav() {
+type MobileNavProps = {
+  notificationCount?: number;
+};
+
+export function MobileNav({ notificationCount = 0 }: MobileNavProps) {
   const pathname = usePathname();
 
   return (
@@ -21,7 +25,7 @@ export function MobileNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center gap-1 rounded-[20px] px-2 py-2 text-[11px] font-semibold",
+                "relative flex flex-col items-center gap-1 rounded-[20px] px-2 py-2 text-[11px] font-semibold",
                 isActive
                   ? "bg-[var(--foreground)] text-white"
                   : "text-[var(--muted)] hover:bg-black/5 hover:text-[var(--foreground)]",
@@ -29,6 +33,11 @@ export function MobileNav() {
             >
               <Icon className="size-4" />
               <span>{item.title}</span>
+              {item.href === "/app/notifications" && notificationCount > 0 ? (
+                <span className="absolute right-2 top-2 inline-flex min-w-4 items-center justify-center rounded-full bg-[var(--primary)] px-1 text-[9px] font-bold text-white">
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}

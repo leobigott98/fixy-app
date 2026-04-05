@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/auth/session";
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
 import type { WorkshopRole } from "@/lib/permissions";
-import { buildOpeningHoursLabel, type WorkshopProfileInput } from "@/lib/workshops/schema";
+import {
+  buildOpeningHoursLabel,
+  slugifyWorkshopPublicSlug,
+  type WorkshopProfileInput,
+} from "@/lib/workshops/schema";
 
 export type WorkshopRecord = {
   id: string;
@@ -20,7 +24,16 @@ export type WorkshopRecord = {
   opening_hours_label: string;
   bay_count: number;
   logo_url: string | null;
+  gallery_image_urls: string[] | null;
   preferred_currency: "USD" | "VES" | "USD_VES";
+  public_description: string | null;
+  public_address: string | null;
+  public_contact_phone: string | null;
+  public_contact_email: string | null;
+  public_slug: string | null;
+  public_services: string[] | null;
+  profile_visibility: "private" | "public";
+  verification_status: "not_requested" | "pending" | "verified";
   created_at: string;
   updated_at: string;
 };
@@ -110,6 +123,11 @@ type QuoteAnalyticsRow = {
   total_amount: number | string | null;
 };
 
+type WorkshopSlugLookupRecord = {
+  id: string;
+  public_slug: string | null;
+};
+
 function getMonthSeries(months: number) {
   const now = new Date();
 
@@ -185,6 +203,37 @@ function formatDashboardStatus(status: string) {
       return "Cancelada";
     default:
       return status;
+  }
+}
+
+async function ensureUniquePublicSlug(
+  requestedSlug: string,
+  currentWorkshopId?: string,
+) {
+  const supabase = await createSupabaseDataClient();
+  const baseSlug = slugifyWorkshopPublicSlug(requestedSlug);
+  let candidate = baseSlug;
+  let suffix = 2;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("workshops")
+      .select("id, public_slug")
+      .eq("public_slug", candidate)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    const match = (data as WorkshopSlugLookupRecord | null) ?? null;
+
+    if (!match || match.id === currentWorkshopId) {
+      return candidate;
+    }
+
+    candidate = `${baseSlug}-${suffix}`;
+    suffix += 1;
   }
 }
 
@@ -290,6 +339,23 @@ export async function upsertCurrentWorkshop(input: WorkshopProfileInput) {
     throw new Error("Sesion no disponible.");
   }
 
+  const supabase = await createSupabaseDataClient();
+  const { data: existingWorkshop, error: existingWorkshopError } = await supabase
+    .from("workshops")
+    .select("id, public_slug")
+    .eq("owner_email", session.user.email)
+    .maybeSingle();
+
+  if (existingWorkshopError && !isMissingRelationError(existingWorkshopError)) {
+    throw existingWorkshopError;
+  }
+
+  const currentWorkshop = (existingWorkshop as WorkshopSlugLookupRecord | null) ?? null;
+  const publicSlug = await ensureUniquePublicSlug(
+    input.publicSlug || currentWorkshop?.public_slug || input.workshopName,
+    currentWorkshop?.id,
+  );
+
   const payload = {
     owner_email: session.user.email,
     owner_name: input.ownerName,
@@ -303,10 +369,17 @@ export async function upsertCurrentWorkshop(input: WorkshopProfileInput) {
     opening_hours_label: buildOpeningHoursLabel(input),
     bay_count: input.bayCount,
     logo_url: input.logoUrl ?? null,
+    gallery_image_urls: input.galleryImageUrls,
     preferred_currency: input.currencyDisplay,
+    public_description: input.publicDescription || null,
+    public_address: input.publicAddress || null,
+    public_contact_phone: input.publicContactPhone || null,
+    public_contact_email: input.publicContactEmail || null,
+    public_slug: publicSlug,
+    public_services: input.publicServices,
+    profile_visibility: input.profileVisibility,
   };
 
-  const supabase = await createSupabaseDataClient();
   const { data, error } = await supabase
     .from("workshops")
     .upsert(payload, { onConflict: "owner_email" })
@@ -318,6 +391,26 @@ export async function upsertCurrentWorkshop(input: WorkshopProfileInput) {
   }
 
   return data as WorkshopRecord;
+}
+
+export async function getPublicWorkshopBySlug(slug: string) {
+  const supabase = await createSupabaseDataClient();
+  const { data, error } = await supabase
+    .from("workshops")
+    .select("*")
+    .eq("public_slug", slugifyWorkshopPublicSlug(slug))
+    .eq("profile_visibility", "public")
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  return (data as WorkshopRecord | null) ?? null;
 }
 
 export async function getDashboardStats(workshopId: string): Promise<DashboardStats> {

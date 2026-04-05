@@ -7,6 +7,12 @@ export const uploadScopes = {
     maxSizeInBytes: 5 * 1024 * 1024,
     mimeTypes: ["image/jpeg", "image/webp", "image/png", "image/svg+xml"],
   },
+  workshop_gallery: {
+    folder: "workshops/gallery",
+    maxFiles: 8,
+    maxSizeInBytes: 8 * 1024 * 1024,
+    mimeTypes: ["image/jpeg", "image/webp", "image/png"],
+  },
   payment_proof: {
     folder: "payments/proofs",
     maxFiles: 1,

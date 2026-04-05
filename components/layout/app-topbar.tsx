@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Bell, Search } from "lucide-react";
 
 import { LogoutButton } from "@/components/layout/logout-button";
@@ -9,9 +10,16 @@ type AppTopbarProps = {
   role: string;
   workshopName: string;
   workshopLogoUrl?: string;
+  notificationCount?: number;
 };
 
-export function AppTopbar({ userName, role, workshopName, workshopLogoUrl }: AppTopbarProps) {
+export function AppTopbar({
+  userName,
+  role,
+  workshopName,
+  workshopLogoUrl,
+  notificationCount = 0,
+}: AppTopbarProps) {
   return (
     <div className="flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/72 p-4 shadow-[0_18px_40px_rgba(21,28,35,0.07)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
       <div className="space-y-2">
@@ -48,8 +56,15 @@ export function AppTopbar({ userName, role, workshopName, workshopLogoUrl }: App
         <Button variant="outline" size="icon" aria-label="Buscar">
           <Search className="size-4" />
         </Button>
-        <Button variant="outline" size="icon" aria-label="Notificaciones">
-          <Bell className="size-4" />
+        <Button asChild className="relative" variant="outline" size="icon">
+          <Link aria-label="Notificaciones" href="/app/notifications">
+            <Bell className="size-4" />
+            {notificationCount > 0 ? (
+              <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--primary)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {notificationCount > 9 ? "9+" : notificationCount}
+              </span>
+            ) : null}
+          </Link>
         </Button>
         <LogoutButton />
       </div>

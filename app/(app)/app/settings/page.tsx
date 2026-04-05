@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { CreditCard, ShieldCheck, ShoppingCart, Truck, UsersRound } from "lucide-react";
+import { CreditCard, Globe, ShieldCheck, ShoppingCart, Truck, UsersRound } from "lucide-react";
 
 import { PermissionBanner } from "@/components/shared/permission-banner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { WorkshopProfileForm } from "@/components/workshops/workshop-profile-form";
 import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
 import { getRoleLabel, getRolePermissions, hasPermission } from "@/lib/permissions";
-import type { WorkshopProfileInput } from "@/lib/workshops/schema";
+import { buildWorkshopPublicPath, type WorkshopProfileInput } from "@/lib/workshops/schema";
 
 export default async function SettingsPage() {
   const workshop = await requireCurrentWorkshop();
@@ -18,6 +18,7 @@ export default async function SettingsPage() {
   const role = access?.role ?? "mechanic";
   const permissions = getRolePermissions(role);
   const canManageWorkshop = hasPermission(role, "manage_workshop");
+  const publicPath = workshop.public_slug ? buildWorkshopPublicPath(workshop.public_slug) : null;
 
   const initialValues: WorkshopProfileInput = {
     workshopName: workshop.workshop_name,
@@ -30,14 +31,24 @@ export default async function SettingsPage() {
     closesAt: workshop.closes_at.slice(0, 5),
     bayCount: workshop.bay_count,
     logoUrl: workshop.logo_url ?? "",
+    galleryImageUrls: workshop.gallery_image_urls ?? [],
     currencyDisplay: workshop.preferred_currency,
+    publicDescription: workshop.public_description ?? "",
+    publicAddress: workshop.public_address ?? "",
+    publicContactPhone: workshop.public_contact_phone ?? "",
+    publicContactEmail: workshop.public_contact_email ?? "",
+    publicSlug: workshop.public_slug ?? "",
+    publicServices: workshop.public_services?.length
+      ? (workshop.public_services as WorkshopProfileInput["publicServices"])
+      : ["Diagnostico general", "Mantenimiento preventivo"],
+    profileVisibility: workshop.profile_visibility,
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Perfil del taller"
-        description="Edita la informacion principal del taller y revisa la base ligera de roles, permisos y crecimiento."
+        description="Edita la informacion principal del taller y prepara la ficha publica que servira como base para discovery mas adelante."
         status="Configuracion"
       />
 
@@ -49,7 +60,37 @@ export default async function SettingsPage() {
         />
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-4">
+        <Card className="bg-white/84">
+          <CardContent className="space-y-3 px-5 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-[rgba(15,118,110,0.12)] text-[var(--secondary)]">
+                <Globe className="size-5" />
+              </div>
+              <div>
+                <div className="text-sm text-[var(--muted)]">Perfil publico</div>
+                <div className="font-medium">
+                  {workshop.profile_visibility === "public" ? "Visible" : "Privado"}
+                </div>
+              </div>
+            </div>
+            <p className="text-sm leading-6 text-[var(--muted)]">
+              {publicPath
+                ? `Ruta preparada: ${publicPath}`
+                : "El slug se genera al guardar la configuracion publica."}
+            </p>
+            {workshop.profile_visibility === "public" && publicPath ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href={publicPath as Route} target="_blank">
+                  Abrir perfil
+                </Link>
+              </Button>
+            ) : (
+              <Badge>solo visible internamente</Badge>
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="bg-white/84">
           <CardContent className="space-y-3 px-5 py-5">
             <div className="flex items-center gap-3">
@@ -119,6 +160,11 @@ export default async function SettingsPage() {
             <ReadOnlyField label="Encargado" value={workshop.owner_name} />
             <ReadOnlyField label="WhatsApp" value={workshop.whatsapp_phone} />
             <ReadOnlyField label="Ciudad" value={workshop.city} />
+            <ReadOnlyField
+              label="Perfil publico"
+              value={workshop.profile_visibility === "public" ? "Visible" : "Privado"}
+            />
+            <ReadOnlyField label="Slug" value={workshop.public_slug ?? "Se genera al publicar"} />
           </CardContent>
         </Card>
       )}

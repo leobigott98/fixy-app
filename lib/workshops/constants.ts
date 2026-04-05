@@ -33,3 +33,31 @@ export const currencyDisplayOptions = [
 ] as const;
 
 export const currencyDisplayValues = ["USD", "VES", "USD_VES"] as const;
+
+export const publicProfileVisibilityOptions = [
+  {
+    value: "private",
+    label: "Privado",
+    description: "Mantiene el perfil fuera de la vista publica mientras lo preparas.",
+  },
+  {
+    value: "public",
+    label: "Publico",
+    description: "Activa una pagina lista para compartir y descubrir mas adelante.",
+  },
+] as const;
+
+export const publicProfileVisibilityValues = ["private", "public"] as const;
+
+export const workshopServiceOptions = [
+  "Diagnostico general",
+  "Mantenimiento preventivo",
+  "Cambio de aceite y filtros",
+  "Frenos y suspension",
+  "Alineacion y balanceo",
+  "Electricidad y bateria",
+  "Escaner y sensores",
+  "Aire acondicionado",
+  "Latoneria y pintura",
+  "Cauchos y tren delantero",
+] as const;

@@ -52,6 +52,9 @@ export default function LandingPage() {
           <FixyLogo />
           <div className="flex items-center gap-2">
             <Button asChild variant="ghost" className="hidden sm:inline-flex">
+              <Link href="/talleres">Explorar talleres</Link>
+            </Button>
+            <Button asChild variant="outline">
               <Link href="/login">Entrar</Link>
             </Button>
             <Button asChild variant="primary">
@@ -81,7 +84,7 @@ export default function LandingPage() {
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg">
-                <Link href="/login">Entrar a la demo</Link>
+                <Link href="/talleres">Explorar talleres</Link>
               </Button>
             </div>
 
@@ -155,6 +158,35 @@ export default function LandingPage() {
                 </Card>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+        <div className="grid gap-8 rounded-[36px] border border-[var(--line)] bg-white/76 p-6 shadow-[0_20px_60px_rgba(21,28,35,0.08)] lg:grid-cols-[0.95fr_1.05fr] lg:p-8">
+          <SectionTitle
+            eyebrow="Discovery"
+            title="Fixy tambien empieza a conectar talleres con conductores"
+            description="La primera capa publica ya permite descubrir talleres, revisar servicios y dejar una solicitud ligera desde el telefono."
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              "Directorio con filtros por ubicacion",
+              "Filtros por servicio",
+              "Detalle del taller con confianza base",
+              "Solicitud ligera + WhatsApp",
+            ].map((item) => (
+              <div
+                key={item}
+                className="flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.03)] px-4 py-4 text-sm font-medium"
+              >
+                <MessageCircleMore className="size-4 text-[var(--secondary)]" />
+                {item}
+              </div>
+            ))}
+            <Button asChild className="sm:col-span-2" variant="secondary">
+              <Link href="/talleres">Ir al directorio</Link>
+            </Button>
           </div>
         </div>
       </section>

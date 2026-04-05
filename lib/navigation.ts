@@ -7,6 +7,7 @@ import {
   ContactRound,
   FileBarChart2,
   Gauge,
+  Bell,
   ShoppingCart,
   Settings,
   Truck,
@@ -74,6 +75,11 @@ export const primaryNavigation = [
     title: "Reportes",
     href: "/app/reports" as Route,
     icon: FileBarChart2,
+  },
+  {
+    title: "Solicitudes",
+    href: "/app/notifications" as Route,
+    icon: Bell,
   },
   {
     title: "Ajustes",

@@ -25,7 +25,7 @@ export function PublicShell({
   children,
 }: PublicShellProps) {
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#fff7ed_0%,#fff 34%,#f8fafc_100%)] px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#fff7ed_0%,#fff_34%,#f8fafc_100%)] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="overflow-hidden rounded-[32px] border border-[var(--line)] bg-white shadow-[0_28px_80px_rgba(21,28,35,0.1)]">
           <div className="grid gap-6 border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(249,115,22,0.12),rgba(15,118,110,0.06))] px-6 py-7 sm:px-8 md:grid-cols-[1.15fr_0.85fr]">
@@ -56,12 +56,12 @@ export function PublicShell({
                     </div>
                   )}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="font-[family-name:var(--font-heading)] text-2xl font-bold tracking-tight">
                     {workshop.name}
                   </div>
                   <div className="mt-1 text-sm text-[var(--muted)]">
-                    {workshop.city} · {workshop.phone}
+                    {workshop.city} | {workshop.phone}
                   </div>
                 </div>
               </div>

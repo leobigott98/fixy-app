@@ -45,7 +45,15 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
     closesAt: "17:00",
     bayCount: 2,
     logoUrl: "",
+    galleryImageUrls: [],
     currencyDisplay: "USD",
+    publicDescription: "",
+    publicAddress: "",
+    publicContactPhone: "",
+    publicContactEmail: "",
+    publicSlug: "",
+    publicServices: ["Diagnostico general", "Mantenimiento preventivo"],
+    profileVisibility: "private",
   };
 
   return (
@@ -60,12 +68,12 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             </h1>
             <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-base">
               Completa la identidad operativa del taller para entrar a un dashboard claro, movil y
-              listo para clientes, vehiculos, presupuestos y ordenes.
+              listo para clientes, vehiculos, presupuestos, ordenes y una futura ficha publica.
             </p>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           {[
             {
               icon: <Store className="size-4" />,
@@ -77,6 +85,11 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
               title: "Contexto local",
               text: "Ciudad, WhatsApp y moneda adaptados.",
             },
+            {
+              icon: <Store className="size-4" />,
+              title: "Perfil publico base",
+              text: "Servicios, slug y contacto listos para publicar despues.",
+            },
           ].map((item) => (
             <div key={item.title} className="rounded-[24px] border border-[var(--line)] bg-[rgba(249,115,22,0.05)] p-4">
               <div className="flex items-center gap-2 text-[var(--primary-strong)]">
@@ -86,7 +99,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
               <div className="mt-2 text-sm leading-6 text-[var(--muted)]">{item.text}</div>
             </div>
           ))}
-          <Button variant="outline" className="sm:col-span-2" disabled>
+          <Button variant="outline" className="sm:col-span-3" disabled>
             Siguiente: dashboard operativo
             <ArrowRight className="size-4" />
           </Button>

@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import { upsertCurrentWorkshop } from "@/lib/data/workshops";
-import { workshopProfileSchema, type WorkshopProfileInput } from "@/lib/workshops/schema";
+import {
+  buildWorkshopPublicPath,
+  workshopProfileSchema,
+  type WorkshopProfileInput,
+} from "@/lib/workshops/schema";
 
 type SaveWorkshopResult =
   | {
@@ -30,11 +34,14 @@ export async function saveWorkshopProfileAction(
   }
 
   try {
-    await upsertCurrentWorkshop(parsed.data);
+    const workshop = await upsertCurrentWorkshop(parsed.data);
 
     revalidatePath("/app");
     revalidatePath("/app/dashboard");
     revalidatePath("/app/settings");
+    if (workshop.public_slug) {
+      revalidatePath(buildWorkshopPublicPath(workshop.public_slug));
+    }
 
     return {
       success: true,

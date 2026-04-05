@@ -11,9 +11,14 @@ import { primaryNavigation } from "@/lib/navigation";
 type AppSidebarProps = {
   workshopName?: string;
   workshopLogoUrl?: string;
+  notificationCount?: number;
 };
 
-export function AppSidebar({ workshopName, workshopLogoUrl }: AppSidebarProps) {
+export function AppSidebar({
+  workshopName,
+  workshopLogoUrl,
+  notificationCount = 0,
+}: AppSidebarProps) {
   const pathname = usePathname();
   return (
     <aside className="fixy-shell hidden w-[280px] shrink-0 border-r border-[var(--line)] px-5 py-6 lg:flex lg:flex-col">
@@ -37,6 +42,18 @@ export function AppSidebar({ workshopName, workshopLogoUrl }: AppSidebarProps) {
             >
               <Icon className="size-4" />
               <span>{item.title}</span>
+              {item.href === "/app/notifications" && notificationCount > 0 ? (
+                <span
+                  className={cn(
+                    "ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold",
+                    isActive
+                      ? "bg-white/16 text-white"
+                      : "bg-[rgba(249,115,22,0.12)] text-[var(--primary-strong)]",
+                  )}
+                >
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}
