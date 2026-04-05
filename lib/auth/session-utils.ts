@@ -1,11 +1,32 @@
-import { sessionCookieName } from "@/lib/auth/constants";
-
 export function normalizeSessionEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
 export function normalizeSessionPhone(phone: string) {
-  return phone.replace(/\D+/g, "");
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D+/g, "");
+
+  if (!digits) {
+    return "";
+  }
+
+  if (trimmed.startsWith("+")) {
+    return `+${digits}`;
+  }
+
+  if (digits.startsWith("58")) {
+    return `+${digits}`;
+  }
+
+  if (digits.length === 11 && digits.startsWith("0")) {
+    return `+58${digits.slice(1)}`;
+  }
+
+  if (digits.length === 10) {
+    return `+58${digits}`;
+  }
+
+  return `+${digits}`;
 }
 
 export function isEmailIdentifier(value: string) {
@@ -18,14 +39,6 @@ export function normalizeLoginIdentifier(identifier: string) {
   return isEmailIdentifier(trimmed)
     ? normalizeSessionEmail(trimmed)
     : normalizeSessionPhone(trimmed);
-}
-
-export function buildSessionCookieValue(identifier: string) {
-  return encodeURIComponent(normalizeLoginIdentifier(identifier));
-}
-
-export function parseSessionCookieValue(value: string) {
-  return normalizeLoginIdentifier(decodeURIComponent(value));
 }
 
 export function getDisplayNameFromEmail(email: string) {
@@ -54,8 +67,4 @@ export function getDisplayNameFromIdentifier(identifier: string) {
   }
 
   return `Usuario ${digits.slice(-4)}`;
-}
-
-export function buildSessionCookieString(identifier: string) {
-  return `${sessionCookieName}=${buildSessionCookieValue(identifier)}; path=/; max-age=2592000; SameSite=Lax`;
 }

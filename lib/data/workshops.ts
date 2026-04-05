@@ -9,6 +9,7 @@ import {
   normalizeSessionPhone,
 } from "@/lib/auth/session-utils";
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { WorkshopRole } from "@/lib/permissions";
 import {
   buildOpeningHoursLabel,
@@ -371,6 +372,43 @@ async function ensureMechanicProfileForInvite(params: {
   return (data as { id: string }).id;
 }
 
+async function ensureAuthUserForInvite(params: {
+  email?: string | null;
+  phone?: string | null;
+  fullName: string;
+  role: WorkshopRole;
+}) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || (!params.email && !params.phone)) {
+    return;
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const randomPassword = crypto.randomUUID() + crypto.randomUUID();
+    const { error } = await supabase.auth.admin.createUser({
+      email: params.email ?? undefined,
+      email_confirm: Boolean(params.email),
+      phone: params.phone ?? undefined,
+      phone_confirm: Boolean(params.phone),
+      password: randomPassword,
+      user_metadata: {
+        full_name: params.fullName,
+        fixy_role: params.role,
+      },
+    });
+
+    if (error && !/already registered|exists/i.test(error.message)) {
+      throw error;
+    }
+  } catch (error) {
+    if (error instanceof Error && /already registered|exists/i.test(error.message)) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
 async function findMemberByIdentifier(identifier: string) {
   const supabase = await createSupabaseDataClient();
   const normalizedIdentifier = normalizeLoginIdentifier(identifier);
@@ -437,6 +475,13 @@ export async function acceptWorkshopInviteForIdentifier(identifier: string) {
     return null;
   }
 
+  await ensureAuthUserForInvite({
+    email: invite.email,
+    phone: invite.phone,
+    fullName: invite.full_name,
+    role: invite.role,
+  });
+
   const mechanicId =
     invite.mechanic_id ??
     (await ensureMechanicProfileForInvite({
@@ -476,6 +521,29 @@ export async function acceptWorkshopInviteForIdentifier(identifier: string) {
   }
 
   return findMemberByIdentifier(normalizedIdentifier);
+}
+
+export async function prepareAuthAccessForIdentifier(identifier: string) {
+  const normalizedIdentifier = normalizeLoginIdentifier(identifier);
+
+  if (!normalizedIdentifier) {
+    return null;
+  }
+
+  const membership = await findMemberByIdentifier(normalizedIdentifier);
+
+  if (membership) {
+    await ensureAuthUserForInvite({
+      email: membership.email,
+      phone: membership.phone,
+      fullName: membership.full_name,
+      role: membership.role,
+    });
+
+    return membership;
+  }
+
+  return acceptWorkshopInviteForIdentifier(normalizedIdentifier);
 }
 
 export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess | null> {
@@ -723,6 +791,13 @@ export async function inviteWorkshopMember(values: {
       role: values.role,
       mechanicId: values.mechanicId,
     }));
+
+  await ensureAuthUserForInvite({
+    email,
+    phone,
+    fullName: values.fullName,
+    role: values.role,
+  });
 
   if (existingMemberData) {
     const { error } = await supabase

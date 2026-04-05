@@ -1,26 +1,50 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
-import { sessionCookieName } from "@/lib/auth/constants";
 import { listViewCookieName } from "@/lib/view-preference-constants";
 
-const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"];
+const AUTH_ROUTES = ["/login", "/signup", "/forgot-password", "/mfa"];
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const session = request.cookies.get(sessionCookieName)?.value;
   const isAuthRoute = AUTH_ROUTES.includes(pathname);
   const isAppRoute = pathname.startsWith("/app");
+  let response = NextResponse.next({
+    request,
+  });
 
-  if (isAppRoute && !session) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({
+            request,
+          });
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        },
+      },
+    },
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (isAppRoute && !user) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (isAuthRoute && session) {
+  if (isAuthRoute && user && pathname !== "/mfa") {
     return NextResponse.redirect(new URL("/app/dashboard", request.url));
   }
 
-  const response = NextResponse.next();
   const requestedView = request.nextUrl.searchParams.get("view");
 
   if (requestedView === "cards" || requestedView === "table") {
@@ -35,5 +59,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login", "/signup", "/forgot-password"],
+  matcher: ["/app/:path*", "/login", "/signup", "/forgot-password", "/mfa"],
 };

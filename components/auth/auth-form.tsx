@@ -3,15 +3,17 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useState, type ReactNode } from "react";
+import { startTransition, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { forgotPasswordAction, loginAction, signupAction } from "@/app/actions/auth";
+import { prepareOtpAccessAction } from "@/app/actions/auth-access";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isEmailIdentifier, normalizeLoginIdentifier } from "@/lib/auth/session-utils";
 
 type AuthVariant = "login" | "signup" | "forgot-password";
 
@@ -19,9 +21,12 @@ type AuthFormProps = {
   variant: AuthVariant;
 };
 
+type OtpPhase = "request" | "verify";
+
 const copyByVariant = {
   login: {
-    button: "Entrar al taller",
+    requestButton: "Enviar codigo",
+    verifyButton: "Entrar al taller",
     footer: (
       <>
         Aun no tienes cuenta?{" "}
@@ -32,7 +37,8 @@ const copyByVariant = {
     ),
   },
   signup: {
-    button: "Crear cuenta",
+    requestButton: "Enviar codigo de registro",
+    verifyButton: "Verificar y continuar",
     footer: (
       <>
         Ya tienes cuenta?{" "}
@@ -43,7 +49,8 @@ const copyByVariant = {
     ),
   },
   "forgot-password": {
-    button: "Enviar enlace",
+    requestButton: "Recibir codigo",
+    verifyButton: "Verificar codigo",
     footer: (
       <Link className="font-semibold text-[var(--primary-strong)]" href="/login">
         Volver al login
@@ -54,25 +61,26 @@ const copyByVariant = {
 
 export function AuthForm({ variant }: AuthFormProps) {
   const router = useRouter();
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [phase, setPhase] = useState<OtpPhase>("request");
+  const [pendingIdentifier, setPendingIdentifier] = useState<string>("");
+  const [signupDraft, setSignupDraft] = useState<{ name?: string; workshopName?: string }>({});
 
   const schema = z.object({
     identifier:
       variant === "signup"
         ? z.string().email("Ingresa un correo valido.")
         : z.string().trim().min(4, "Ingresa tu correo o telefono."),
-    password:
-      variant === "forgot-password"
-        ? z.string().optional()
-        : z.string().min(6, "Ingresa una clave de al menos 6 caracteres."),
     workshopName:
       variant === "signup"
-        ? z.string().min(2, "Ingresa el nombre del taller.")
+        ? z.string().trim().min(2, "Ingresa el nombre del taller.")
         : z.string().optional(),
     name:
       variant === "signup"
-        ? z.string().min(2, "Ingresa tu nombre.")
+        ? z.string().trim().min(2, "Ingresa tu nombre.")
         : z.string().optional(),
+    code: z.string().trim().optional(),
   });
 
   type FormValues = z.infer<typeof schema>;
@@ -80,41 +88,169 @@ export function AuthForm({ variant }: AuthFormProps) {
   const {
     register,
     handleSubmit,
+    getValues,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    defaultValues: {
+      identifier: "",
+      workshopName: "",
+      name: "",
+      code: "",
+    },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
-    if (variant === "forgot-password") {
-      const result = await forgotPasswordAction({ identifier: values.identifier });
-      setFeedback(result.message);
-      return;
+  async function requestCode(values: FormValues) {
+    const identifier = normalizeLoginIdentifier(values.identifier);
+    const isEmail = isEmailIdentifier(identifier);
+    const signupParams = new URLSearchParams();
+
+    if (variant === "signup" && values.name?.trim()) {
+      signupParams.set("ownerName", values.name.trim());
     }
 
-    const result =
+    if (variant === "signup" && values.workshopName?.trim()) {
+      signupParams.set("workshopName", values.workshopName.trim());
+    }
+
+    const nextDestination =
       variant === "signup"
-        ? await signupAction({
-            email: values.identifier,
-            password: values.password ?? "",
-            name: values.name,
-            workshopName: values.workshopName,
-          })
-        : await loginAction({
-            identifier: values.identifier,
-            password: values.password ?? "",
-          });
+        ? `/app/onboarding${signupParams.toString() ? `?${signupParams.toString()}` : ""}`
+        : "/app";
+    const emailRedirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+            nextDestination,
+          )}`
+        : undefined;
 
-    setFeedback(result.message);
+    if (variant !== "signup") {
+      const preparation = await prepareOtpAccessAction(identifier);
 
-    if (!result.success) {
+      if (!preparation.success) {
+        setFeedback(preparation.message ?? "No se pudo preparar el acceso.");
+        return;
+      }
+    }
+
+    const { error } = await supabase.auth.signInWithOtp(
+      isEmail
+        ? {
+            email: identifier,
+            options: {
+              shouldCreateUser: variant === "signup",
+              emailRedirectTo,
+              data:
+                variant === "signup"
+                  ? {
+                      full_name: values.name?.trim(),
+                      workshop_name: values.workshopName?.trim(),
+                    }
+                  : undefined,
+            },
+          }
+        : {
+            phone: identifier,
+            options: {
+              shouldCreateUser: false,
+            },
+          },
+    );
+
+    if (error) {
+      setFeedback(error.message);
       return;
     }
+
+    setPendingIdentifier(identifier);
+    setSignupDraft({
+      name: values.name?.trim(),
+      workshopName: values.workshopName?.trim(),
+    });
+    setPhase("verify");
+    setFeedback(
+      isEmail
+        ? `Te enviamos un enlace o codigo a ${values.identifier}. Si usas el enlace, Fixy te llevara directo al acceso.`
+        : `Te enviamos un codigo por SMS a ${values.identifier}.`,
+    );
+  }
+
+  async function verifyCode(values: FormValues) {
+    const token = values.code?.trim() ?? "";
+
+    if (!token) {
+      setError("code", { message: "Ingresa el codigo." });
+      return;
+    }
+
+    const isEmail = isEmailIdentifier(pendingIdentifier);
+    const { error } = await supabase.auth.verifyOtp(
+      isEmail
+        ? {
+            email: pendingIdentifier,
+            token,
+            type: "email",
+          }
+        : {
+            phone: pendingIdentifier,
+            token,
+            type: "sms",
+          },
+    );
+
+    if (error) {
+      setFeedback(error.message);
+      return;
+    }
+
+    setFeedback("Codigo validado. Entrando a Fixy...");
 
     startTransition(() => {
-      router.push(result.redirectTo as Route);
+      if (variant === "signup") {
+        const params = new URLSearchParams();
+
+        if (signupDraft.name) {
+          params.set("ownerName", signupDraft.name);
+        }
+
+        if (signupDraft.workshopName) {
+          params.set("workshopName", signupDraft.workshopName);
+        }
+
+        router.push(`/app/onboarding?${params.toString()}` as Route);
+      } else {
+        router.push("/app" as Route);
+      }
+
+      router.refresh();
     });
+  }
+
+  const onSubmit = handleSubmit(async (values) => {
+    setFeedback(null);
+
+    if (phase === "request") {
+      await requestCode(values);
+      return;
+    }
+
+    await verifyCode(values);
   });
+
+  const footer = phase === "verify" ? (
+    <button
+      className="font-semibold text-[var(--primary-strong)]"
+      onClick={async () => {
+        await requestCode(getValues());
+      }}
+      type="button"
+    >
+      Reenviar codigo
+    </button>
+  ) : (
+    copyByVariant[variant].footer
+  );
 
   return (
     <Card className="bg-white/88">
@@ -140,27 +276,34 @@ export function AuthForm({ variant }: AuthFormProps) {
             error={errors.identifier?.message}
             input={
               <Input
+                disabled={phase === "verify"}
                 placeholder={variant === "signup" ? "taller@fixy.app" : "taller@fixy.app o 04141234567"}
                 {...register("identifier")}
               />
             }
           />
 
-          {variant !== "forgot-password" ? (
+          {phase === "verify" ? (
             <Field
-              label="Clave"
-              error={errors.password?.message}
-              input={<Input type="password" placeholder="******" {...register("password")} />}
+              label={isEmailIdentifier(pendingIdentifier) ? "Codigo opcional" : "Codigo"}
+              error={errors.code?.message}
+              input={
+                <Input
+                  inputMode="numeric"
+                  placeholder={isEmailIdentifier(pendingIdentifier) ? "Si recibiste codigo, escríbelo aquí" : "123456"}
+                  {...register("code")}
+                />
+              }
             />
           ) : null}
 
-          {variant === "login" ? (
+          {variant === "login" && phase === "request" ? (
             <div className="flex justify-end">
               <Link
                 className="text-sm font-medium text-[var(--muted)] hover:text-[var(--foreground)]"
                 href="/forgot-password"
               >
-                Olvide mi clave
+                Reenviar codigo de acceso
               </Link>
             </div>
           ) : null}
@@ -172,11 +315,13 @@ export function AuthForm({ variant }: AuthFormProps) {
           ) : null}
 
           <Button variant="primary" className="w-full" disabled={isSubmitting} type="submit">
-            {copyByVariant[variant].button}
+            {phase === "request"
+              ? copyByVariant[variant].requestButton
+              : copyByVariant[variant].verifyButton}
           </Button>
         </form>
 
-        <div className="text-center text-sm text-[var(--muted)]">{copyByVariant[variant].footer}</div>
+        <div className="text-center text-sm text-[var(--muted)]">{footer}</div>
       </CardContent>
     </Card>
   );
