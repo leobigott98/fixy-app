@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  confirmAndScheduleMarketplaceInquiry,
   createMarketplaceInquiry,
   createMarketplaceReview,
   markMarketplaceInquiryAsContacted,
@@ -81,6 +82,17 @@ export async function markMarketplaceInquiryAsContactedAction(inquiryId: string)
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
   revalidatePath("/app/notifications");
+}
+
+export async function confirmAndScheduleMarketplaceInquiryAction(inquiryId: string) {
+  const workshop = await requireCurrentWorkshop();
+  await confirmAndScheduleMarketplaceInquiry(inquiryId, workshop.id);
+
+  revalidatePath("/app");
+  revalidatePath("/app/dashboard");
+  revalidatePath("/app/notifications");
+  revalidatePath("/app/calendar");
+  revalidatePath("/app/appointments");
 }
 
 type SubmitMarketplaceReviewResult =

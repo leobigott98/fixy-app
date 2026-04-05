@@ -104,6 +104,24 @@ export function buildWorkOrderStatusMessage(input: {
   ].join(" ");
 }
 
+export function buildAppointmentConfirmationMessage(input: {
+  clientName: string;
+  workshopName: string;
+  vehicleSummary: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  serviceNeeded: string;
+}) {
+  return [
+    `Hola ${input.clientName}, te escribe ${input.workshopName}.`,
+    `Confirmamos tu cita para ${input.vehicleSummary}.`,
+    `Fecha: ${input.appointmentDate}.`,
+    `Hora: ${input.appointmentTime}.`,
+    `Servicio: ${input.serviceNeeded}.`,
+    "Si necesitas moverla o agregar algo, respondeme por aqui.",
+  ].join(" ");
+}
+
 export function buildReadyForPickupMessage(input: {
   clientName: string;
   workshopName: string;

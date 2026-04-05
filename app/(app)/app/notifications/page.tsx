@@ -1,9 +1,12 @@
 import type { Route } from "next";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { Bell, LayoutGrid, MapPin, MessageCircleMore, PhoneCall, TableProperties, Wrench } from "lucide-react";
+import { Bell, CalendarCheck2, LayoutGrid, MapPin, MessageCircleMore, PhoneCall, TableProperties, Wrench } from "lucide-react";
 
-import { markMarketplaceInquiryAsContactedAction } from "@/app/actions/marketplace";
+import {
+  confirmAndScheduleMarketplaceInquiryAction,
+  markMarketplaceInquiryAsContactedAction,
+} from "@/app/actions/marketplace";
 import { PageHeader } from "@/components/shared/page-header";
 import { ViewToggle } from "@/components/shared/view-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +16,7 @@ import { getWorkshopNotifications } from "@/lib/data/marketplace";
 import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
 import { hasModuleAccess } from "@/lib/permissions";
 import { getPreferredListView } from "@/lib/view-preferences";
-import { buildWhatsAppHref } from "@/lib/whatsapp";
+import { buildAppointmentConfirmationMessage, buildWhatsAppHref } from "@/lib/whatsapp";
 
 type NotificationsPageProps = {
   searchParams: Promise<{
@@ -38,6 +41,30 @@ function formatCreatedAt(value: string) {
 
 function getContactHref(phone: string) {
   return `tel:${phone.replace(/\s+/g, "")}`;
+}
+
+function buildConfirmationWhatsappHref(
+  item: Awaited<ReturnType<typeof getWorkshopNotifications>>[number],
+  workshopName: string,
+) {
+  if (!item.requestedDate || !item.requestedTime) {
+    return buildWhatsAppHref(
+      item.requesterPhone,
+      `Hola ${item.requesterName}, te escribe ${workshopName} desde Fixy sobre tu solicitud de ${item.requestedService}.`,
+    );
+  }
+
+  return buildWhatsAppHref(
+    item.requesterPhone,
+    buildAppointmentConfirmationMessage({
+      clientName: item.requesterName,
+      workshopName,
+      vehicleSummary: item.vehicleReference || "tu vehiculo",
+      appointmentDate: item.requestedDate,
+      appointmentTime: item.requestedTime,
+      serviceNeeded: item.requestedService,
+    }),
+  );
 }
 
 export default async function NotificationsPage({ searchParams }: NotificationsPageProps) {
@@ -117,10 +144,8 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
                           requesterPhone={item.requesterPhone}
                           requesterPhoneHref={getContactHref(item.requesterPhone)}
                           status={item.status}
-                          whatsappHref={buildWhatsAppHref(
-                            item.requesterPhone,
-                            `Hola ${item.requesterName}, te escribe ${workshop.workshop_name} desde Fixy sobre tu solicitud de ${item.requestedService}.`,
-                          )}
+                          whatsappHref={buildConfirmationWhatsappHref(item, workshop.workshop_name)}
+                          workshopName={workshop.workshop_name}
                           item={item}
                         />
                       ))}
@@ -166,11 +191,9 @@ function NotificationCard({
   item: Awaited<ReturnType<typeof getWorkshopNotifications>>[number];
   workshopName: string;
 }) {
-  const whatsappHref = buildWhatsAppHref(
-    item.requesterPhone,
-    `Hola ${item.requesterName}, te escribe ${workshopName} desde Fixy sobre tu solicitud de ${item.requestedService}.`,
-  );
+  const whatsappHref = buildConfirmationWhatsappHref(item, workshopName);
   const markAction = markMarketplaceInquiryAsContactedAction.bind(null, item.id);
+  const confirmAndScheduleAction = confirmAndScheduleMarketplaceInquiryAction.bind(null, item.id);
 
   return (
     <Card className="bg-white/88">
@@ -209,6 +232,14 @@ function NotificationCard({
                 </Button>
               </form>
             ) : null}
+            {item.canConfirmAndSchedule ? (
+              <form action={confirmAndScheduleAction}>
+                <Button size="sm" type="submit" variant="secondary">
+                  <CalendarCheck2 className="size-4" />
+                  Confirmar y agendar
+                </Button>
+              </form>
+            ) : null}
           </div>
         </div>
 
@@ -226,10 +257,24 @@ function NotificationCard({
           />
         </div>
 
+        {item.requestedDate && item.requestedTime ? (
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="primary">{item.requestedDate}</Badge>
+            <Badge>{item.requestedTime}</Badge>
+            {item.ownerAppointmentStatus ? <Badge variant="success">{item.ownerAppointmentStatus}</Badge> : null}
+          </div>
+        ) : null}
+
         <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
           <div className="text-sm text-[var(--muted)]">Mensaje</div>
           <div className="mt-2 text-sm leading-6 text-[var(--foreground)]">{item.message}</div>
         </div>
+
+        {item.workshopResponseNote ? (
+          <div className="rounded-[24px] border border-[rgba(15,118,110,0.16)] bg-[rgba(15,118,110,0.08)] p-4 text-sm leading-6 text-[var(--foreground)]">
+            {item.workshopResponseNote}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -241,14 +286,17 @@ function NotificationTableRow({
   requesterPhoneHref,
   whatsappHref,
   status,
+  workshopName,
 }: {
   item: Awaited<ReturnType<typeof getWorkshopNotifications>>[number];
   requesterPhone: string;
   requesterPhoneHref: string;
   whatsappHref: string | null;
   status: "new" | "contacted" | "closed";
+  workshopName: string;
 }) {
   const markAction = markMarketplaceInquiryAsContactedAction.bind(null, item.id);
+  const confirmAndScheduleAction = confirmAndScheduleMarketplaceInquiryAction.bind(null, item.id);
 
   return (
     <tr className="border-t border-[var(--line)] align-top">
@@ -257,7 +305,12 @@ function NotificationTableRow({
         <div className="mt-1 text-xs text-[var(--muted)]">{requesterPhone}</div>
       </td>
       <td className="px-5 py-4">{item.requestedService}</td>
-      <td className="px-5 py-4">{item.requesterCity || "No especificada"}</td>
+      <td className="px-5 py-4">
+        <div>{item.requesterCity || "No especificada"}</div>
+        {item.requestedDate && item.requestedTime ? (
+          <div className="mt-1 text-xs text-[var(--muted)]">{`${item.requestedDate} · ${item.requestedTime}`}</div>
+        ) : null}
+      </td>
       <td className="px-5 py-4">
         <Badge variant={status === "new" ? "primary" : "success"}>
           {status === "new" ? "Nueva" : status === "contacted" ? "Contactada" : "Cerrada"}
@@ -282,6 +335,14 @@ function NotificationTableRow({
             <form action={markAction}>
               <Button size="sm" type="submit" variant="primary">
                 Marcar
+              </Button>
+            </form>
+          ) : null}
+          {item.canConfirmAndSchedule ? (
+            <form action={confirmAndScheduleAction}>
+              <Button size="sm" type="submit" variant="secondary">
+                <CalendarCheck2 className="size-4" />
+                Confirmar
               </Button>
             </form>
           ) : null}
