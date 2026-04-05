@@ -4,12 +4,28 @@ export function normalizeSessionEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-export function buildSessionCookieValue(email: string) {
-  return encodeURIComponent(normalizeSessionEmail(email));
+export function normalizeSessionPhone(phone: string) {
+  return phone.replace(/\D+/g, "");
+}
+
+export function isEmailIdentifier(value: string) {
+  return value.includes("@");
+}
+
+export function normalizeLoginIdentifier(identifier: string) {
+  const trimmed = identifier.trim();
+
+  return isEmailIdentifier(trimmed)
+    ? normalizeSessionEmail(trimmed)
+    : normalizeSessionPhone(trimmed);
+}
+
+export function buildSessionCookieValue(identifier: string) {
+  return encodeURIComponent(normalizeLoginIdentifier(identifier));
 }
 
 export function parseSessionCookieValue(value: string) {
-  return decodeURIComponent(value).trim().toLowerCase();
+  return normalizeLoginIdentifier(decodeURIComponent(value));
 }
 
 export function getDisplayNameFromEmail(email: string) {
@@ -26,6 +42,20 @@ export function getDisplayNameFromEmail(email: string) {
     .join(" ");
 }
 
-export function buildSessionCookieString(email: string) {
-  return `${sessionCookieName}=${buildSessionCookieValue(email)}; path=/; max-age=2592000; SameSite=Lax`;
+export function getDisplayNameFromIdentifier(identifier: string) {
+  if (isEmailIdentifier(identifier)) {
+    return getDisplayNameFromEmail(identifier);
+  }
+
+  const digits = normalizeSessionPhone(identifier);
+
+  if (!digits) {
+    return "Miembro";
+  }
+
+  return `Usuario ${digits.slice(-4)}`;
+}
+
+export function buildSessionCookieString(identifier: string) {
+  return `${sessionCookieName}=${buildSessionCookieValue(identifier)}; path=/; max-age=2592000; SameSite=Lax`;
 }

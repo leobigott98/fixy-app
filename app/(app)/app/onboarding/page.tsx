@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getAppSession } from "@/lib/auth/session";
 import { getCurrentWorkshop } from "@/lib/data/workshops";
-import { getDisplayNameFromEmail } from "@/lib/auth/session-utils";
+import { getDisplayNameFromIdentifier } from "@/lib/auth/session-utils";
 import type { WorkshopProfileInput } from "@/lib/workshops/schema";
 
 type OnboardingPageProps = {
@@ -36,7 +36,9 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const params = await searchParams;
   const initialValues: WorkshopProfileInput = {
     workshopName: getFirstParam(params.workshopName) ?? "",
-    ownerName: getFirstParam(params.ownerName) ?? getDisplayNameFromEmail(session.user.email),
+    ownerName:
+      getFirstParam(params.ownerName) ??
+      getDisplayNameFromIdentifier(session.user.email ?? session.user.loginIdentifier),
     whatsappPhone: "",
     city: "",
     workshopType: "Mecanica general",

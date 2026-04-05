@@ -5,7 +5,7 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Entrar a Fixy"
-      description="Ingresa a tu taller para ver presupuesto, ordenes y estado operativo desde una sola base."
+      description="Ingresa a tu taller con correo o telefono para ver tu espacio operativo segun tu rol."
     >
       <AuthForm variant="login" />
     </AuthShell>

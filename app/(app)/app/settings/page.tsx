@@ -8,16 +8,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { WorkshopProfileForm } from "@/components/workshops/workshop-profile-form";
-import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
-import { getRoleLabel, getRolePermissions, hasPermission } from "@/lib/permissions";
+import { WorkshopTeamAccessForm } from "@/components/workshops/workshop-team-access-form";
+import {
+  getCurrentWorkshopAccess,
+  getWorkshopAccessControlData,
+  requireCurrentWorkshop,
+} from "@/lib/data/workshops";
+import { getRoleLabel, hasModuleAccess } from "@/lib/permissions";
 import { buildWorkshopPublicPath, type WorkshopProfileInput } from "@/lib/workshops/schema";
 
 export default async function SettingsPage() {
   const workshop = await requireCurrentWorkshop();
   const access = await getCurrentWorkshopAccess();
+  const teamAccess = await getWorkshopAccessControlData();
   const role = access?.role ?? "mechanic";
-  const permissions = getRolePermissions(role);
-  const canManageWorkshop = hasPermission(role, "manage_workshop");
+  const canManageWorkshop = role === "owner";
   const publicPath = workshop.public_slug ? buildWorkshopPublicPath(workshop.public_slug) : null;
 
   const initialValues: WorkshopProfileInput = {
@@ -105,12 +110,10 @@ export default async function SettingsPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {permissions.length ? (
-                permissions.map((permission) => (
-                  <Badge key={permission}>{permission.replaceAll("_", " ")}</Badge>
-                ))
-              ) : (
-                <Badge>solo lectura base</Badge>
+              {["Dashboard", "Agenda", "Operaciones", canManageWorkshop ? "Configuracion" : "Acceso parcial"].map(
+                (item) => (
+                  <Badge key={item}>{item}</Badge>
+                ),
               )}
             </div>
           </CardContent>
@@ -124,11 +127,11 @@ export default async function SettingsPage() {
               </div>
               <div>
                 <div className="text-sm text-[var(--muted)]">Base de roles</div>
-                <div className="font-medium">owner, admin y mechanic</div>
+                <div className="font-medium">Owner, jefe, recepcion, finanzas y mecanico</div>
               </div>
             </div>
             <p className="text-sm leading-6 text-[var(--muted)]">
-              Suficiente para mostrar permisos por interfaz hoy y crecer a accesos reales despues.
+              Cada rol ya filtra los modulos visibles y prepara accesos operativos mas reales.
             </p>
           </CardContent>
         </Card>
@@ -150,6 +153,79 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {canManageWorkshop ? (
+        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <WorkshopTeamAccessForm mechanicOptions={teamAccess.mechanicOptions} />
+
+          <Card className="bg-white/88">
+            <CardContent className="space-y-5 px-5 py-5">
+              <div className="space-y-2">
+                <Badge variant="primary">Equipo con acceso</Badge>
+                <div className="font-[family-name:var(--font-heading)] text-2xl font-bold tracking-tight">
+                  {teamAccess.members.length} integrante{teamAccess.members.length === 1 ? "" : "s"} activo
+                  {teamAccess.members.length === 1 ? "" : "s"}
+                </div>
+                <p className="text-sm leading-6 text-[var(--muted)]">
+                  Desde aqui puedes controlar quien entra a Fixy y con que alcance operativo.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {teamAccess.members.length ? (
+                  teamAccess.members.map((member) => (
+                    <div
+                      key={member.id}
+                      className="rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-medium">{member.full_name}</div>
+                        <Badge variant="primary">{getRoleLabel(member.role)}</Badge>
+                        {member.mechanic_id ? <Badge>perfil vinculado</Badge> : null}
+                      </div>
+                      <div className="mt-2 text-sm text-[var(--muted)]">
+                        {member.email || member.phone || "Sin contacto"}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[rgba(249,115,22,0.04)] p-4 text-sm leading-6 text-[var(--muted)]">
+                    Aun no has dado acceso al equipo. Usa el formulario para invitar por correo o telefono.
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 border-t border-[var(--line)] pt-4">
+                <div className="font-medium">Invitaciones recientes</div>
+                {teamAccess.invites.length ? (
+                  teamAccess.invites.slice(0, 4).map((invite) => (
+                    <div
+                      key={invite.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-white/80 p-4"
+                    >
+                      <div>
+                        <div className="font-medium">{invite.full_name}</div>
+                        <div className="text-sm text-[var(--muted)]">
+                          {(invite.email || invite.phone || "Sin contacto") + " · " + getRoleLabel(invite.role)}
+                        </div>
+                      </div>
+                      <Badge variant={invite.status === "accepted" ? "success" : "primary"}>
+                        {invite.status === "accepted"
+                          ? "Aceptada"
+                          : invite.status === "cancelled"
+                            ? "Cancelada"
+                            : "Pendiente"}
+                      </Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-[var(--muted)]">Todavia no hay invitaciones registradas.</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {canManageWorkshop ? (
         <WorkshopProfileForm initialValues={initialValues} mode="settings" />
@@ -197,7 +273,13 @@ export default async function SettingsPage() {
                   title: "Compras",
                   text: "Ordenes de compra basicas para reposicion y seguimiento.",
                 },
-              ].map((item) => (
+              ]
+                .filter((item) =>
+                  item.href === "/app/suppliers"
+                    ? hasModuleAccess(role, "suppliers")
+                    : hasModuleAccess(role, "purchase_orders"),
+                )
+                .map((item) => (
                 <div key={item.href} className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
                   <div className="flex gap-3">
                     <div className="mt-0.5 text-[var(--primary-strong)]">{item.icon}</div>
@@ -210,7 +292,7 @@ export default async function SettingsPage() {
                     <Link href={item.href as Route}>Abrir</Link>
                   </Button>
                 </div>
-              ))}
+                ))}
             </div>
           </CardContent>
         </Card>

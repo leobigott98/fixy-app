@@ -36,6 +36,7 @@ export default async function EditAppointmentPage({
         initialValues={buildAppointmentFormDefaults({
           clientId: appointment.client_id,
           vehicleId: appointment.vehicle_id,
+          assignedMechanicId: appointment.assigned_mechanic_id,
           date: appointment.appointment_date,
           time: appointment.appointment_time.slice(0, 5),
           type: appointment.appointment_type,

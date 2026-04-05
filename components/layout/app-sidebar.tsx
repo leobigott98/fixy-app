@@ -5,28 +5,32 @@ import { usePathname } from "next/navigation";
 
 import { FixyLogo } from "@/components/brand/fixy-logo";
 import { Badge } from "@/components/ui/badge";
+import { getPrimaryNavigation } from "@/lib/navigation";
+import type { WorkshopRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { primaryNavigation } from "@/lib/navigation";
 
 type AppSidebarProps = {
+  role: WorkshopRole;
   workshopName?: string;
   workshopLogoUrl?: string;
   notificationCount?: number;
 };
 
 export function AppSidebar({
+  role,
   workshopName,
   workshopLogoUrl,
   notificationCount = 0,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const navigation = getPrimaryNavigation(role);
   return (
     <aside className="fixy-shell hidden w-[280px] shrink-0 border-r border-[var(--line)] px-5 py-6 lg:flex lg:flex-col">
       <FixyLogo />
 
       <div className="mt-8 space-y-2">
-        {primaryNavigation.map((item) => {
-          const isActive = pathname === item.href;
+        {navigation.map((item) => {
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
 
           return (

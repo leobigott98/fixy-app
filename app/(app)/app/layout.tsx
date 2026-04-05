@@ -20,7 +20,8 @@ export default async function AppLayout({ children }: AppLayoutProps) {
   return (
     <ProtectedAppShell
       notificationCount={notificationCount}
-      role={roleLabel}
+      role={access?.role ?? "owner"}
+      roleLabel={roleLabel}
       workshopLogoUrl={workshop?.logo_url ?? undefined}
       userName={access?.member?.full_name ?? workshop?.owner_name ?? session.user.name}
       workshopName={workshop?.workshop_name}

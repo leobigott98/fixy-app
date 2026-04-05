@@ -2,11 +2,17 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { sessionCookieName } from "@/lib/auth/constants";
-import { getDisplayNameFromEmail, parseSessionCookieValue } from "@/lib/auth/session-utils";
+import {
+  getDisplayNameFromIdentifier,
+  isEmailIdentifier,
+  parseSessionCookieValue,
+} from "@/lib/auth/session-utils";
 
 export type AppSession = {
   user: {
-    email: string;
+    loginIdentifier: string;
+    email: string | null;
+    phone: string | null;
     name: string;
     role: string;
   };
@@ -20,13 +26,17 @@ export async function getAppSession(): Promise<AppSession | null> {
     return null;
   }
 
-  const email = parseSessionCookieValue(sessionCookie.value);
+  const loginIdentifier = parseSessionCookieValue(sessionCookie.value);
+  const email = isEmailIdentifier(loginIdentifier) ? loginIdentifier : null;
+  const phone = email ? null : loginIdentifier;
 
   return {
     user: {
+      loginIdentifier,
       email,
-      name: getDisplayNameFromEmail(email),
-      role: "Encargado",
+      phone,
+      name: getDisplayNameFromIdentifier(loginIdentifier),
+      role: "Equipo",
     },
   };
 }

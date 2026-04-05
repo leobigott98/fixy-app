@@ -32,6 +32,10 @@ type AppointmentFormProps = {
       clientId: string | null;
       label: string;
     }>;
+    mechanics: Array<{
+      id: string;
+      label: string;
+    }>;
   };
   appointmentId?: string;
 };
@@ -166,6 +170,20 @@ export function AppointmentForm({
                     {appointmentTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                }
+              />
+              <Field
+                label="Responsable"
+                error={errors.assignedMechanicId?.message}
+                input={
+                  <Select {...register("assignedMechanicId")}>
+                    <option value="">Sin responsable</option>
+                    {options.mechanics.map((mechanic) => (
+                      <option key={mechanic.id} value={mechanic.id}>
+                        {mechanic.label}
                       </option>
                     ))}
                   </Select>

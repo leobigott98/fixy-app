@@ -6,11 +6,13 @@ import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppTopbar } from "@/components/layout/app-topbar";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import type { WorkshopRole } from "@/lib/permissions";
 
 type ProtectedAppShellProps = {
   children: ReactNode;
   userName: string;
-  role: string;
+  role: WorkshopRole;
+  roleLabel: string;
   workshopName?: string;
   workshopLogoUrl?: string;
   notificationCount?: number;
@@ -20,6 +22,7 @@ export function ProtectedAppShell({
   children,
   userName,
   role,
+  roleLabel,
   workshopName,
   workshopLogoUrl,
   notificationCount = 0,
@@ -39,6 +42,7 @@ export function ProtectedAppShell({
     <div className="min-h-screen lg:flex">
       <AppSidebar
         notificationCount={notificationCount}
+        role={role}
         workshopLogoUrl={workshopLogoUrl}
         workshopName={workshopName}
       />
@@ -46,13 +50,14 @@ export function ProtectedAppShell({
         <AppTopbar
           notificationCount={notificationCount}
           role={role}
+          roleLabel={roleLabel}
           workshopLogoUrl={workshopLogoUrl}
           userName={userName}
           workshopName={workshopName ?? "Configura tu taller"}
         />
         <div className="pt-6">{children}</div>
       </div>
-      <MobileNav notificationCount={notificationCount} />
+      <MobileNav notificationCount={notificationCount} role={role} />
     </div>
   );
 }

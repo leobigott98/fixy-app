@@ -1,7 +1,9 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { LayoutGrid, SquarePen, TableProperties, UserPlus, UserRound, UsersRound, Wrench } from "lucide-react";
 
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { ViewToggle } from "@/components/shared/view-toggle";
@@ -10,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getMechanicDetailHref, getMechanicEditHref, getMechanicsList } from "@/lib/data/mechanics";
 import { getMechanicRoleLabel } from "@/lib/mechanics/constants";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { hasModuleAccess } from "@/lib/permissions";
 import { getPreferredListView } from "@/lib/view-preferences";
 
 type MechanicsPageProps = {
@@ -38,6 +40,12 @@ function buildViewHref(view: "cards" | "table", query?: string) {
 
 export default async function MechanicsPage({ searchParams }: MechanicsPageProps) {
   await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
+
+  if (!hasModuleAccess(access?.role ?? "mechanic", "mechanics")) {
+    redirect("/app/dashboard");
+  }
+
   const params = await searchParams;
   const query = getQueryValue(params.q);
   const view = await getPreferredListView(getQueryValue(params.view));

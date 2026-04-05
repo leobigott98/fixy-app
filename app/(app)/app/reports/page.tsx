@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { BarChart3, CircleDollarSign, ClipboardCheck, PackageSearch, WalletCards } from "lucide-react";
 
 import { PermissionBanner } from "@/components/shared/permission-banner";
@@ -7,14 +8,19 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getReportsOverview } from "@/lib/data/reports";
 import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
-import { getRoleLabel, hasPermission } from "@/lib/permissions";
+import { getRoleLabel, hasModuleAccess } from "@/lib/permissions";
 import { formatCurrencyDisplay } from "@/lib/utils";
 
 export default async function ReportsPage() {
   const workshop = await requireCurrentWorkshop();
   const access = await getCurrentWorkshopAccess();
   const role = access?.role ?? "mechanic";
-  const canViewReports = hasPermission(role, "view_reports");
+  const canViewReports = hasModuleAccess(role, "reports");
+
+  if (!canViewReports) {
+    redirect("/app/dashboard");
+  }
+
   const reports = await getReportsOverview();
 
   return (
@@ -25,16 +31,12 @@ export default async function ReportsPage() {
         status="Sprint 11"
       />
 
-      {!canViewReports ? (
-        <PermissionBanner
-          title={`Vista de ${getRoleLabel(role)}`}
-          description="La base de reportes ya existe. En este sprint los mecanicos ven el placeholder y owner/admin ven el resumen completo."
-          tone="warning"
-        />
-      ) : null}
+      <PermissionBanner
+        title={`Vista de ${getRoleLabel(role)}`}
+        description="Reportes queda reservado para owner, admin y finanzas porque concentra lectura de negocio."
+      />
 
-      {canViewReports ? (
-        <>
+      <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="Ordenes activas" value={String(reports.metrics.activeWorkOrders)} icon={<BarChart3 className="size-4" />} />
             <MetricCard label="Ordenes completadas" value={String(reports.metrics.completedWorkOrders)} icon={<ClipboardCheck className="size-4" />} />
@@ -89,8 +91,7 @@ export default async function ReportsPage() {
               </CardContent>
             </Card>
           </div>
-        </>
-      ) : null}
+      </>
     </div>
   );
 }

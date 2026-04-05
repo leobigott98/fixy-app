@@ -8,6 +8,7 @@ import {
 export const appointmentFormSchema = z.object({
   clientId: z.string().uuid("Selecciona un cliente."),
   vehicleId: z.string().uuid("Selecciona un vehiculo."),
+  assignedMechanicId: z.string().trim(),
   date: z.string().trim().min(1, "Selecciona la fecha."),
   time: z
     .string()
@@ -34,6 +35,7 @@ export type AppointmentFormValues = z.infer<typeof appointmentFormSchema>;
 export type AppointmentInput = {
   clientId: string;
   vehicleId: string;
+  assignedMechanicId: string | null;
   date: string;
   time: string;
   type: "ingreso_servicio" | "visita_taller";
@@ -45,6 +47,7 @@ export function normalizeAppointmentInput(values: AppointmentFormValues): Appoin
   return {
     clientId: values.clientId,
     vehicleId: values.vehicleId,
+    assignedMechanicId: values.assignedMechanicId || null,
     date: values.date,
     time: values.time,
     type: values.type,
@@ -57,6 +60,7 @@ export function buildAppointmentFormDefaults(
   source?: Partial<{
     clientId: string | null;
     vehicleId: string | null;
+    assignedMechanicId: string | null;
     date: string | null;
     time: string | null;
     type: AppointmentInput["type"] | null;
@@ -67,6 +71,7 @@ export function buildAppointmentFormDefaults(
   return {
     clientId: source?.clientId ?? "",
     vehicleId: source?.vehicleId ?? "",
+    assignedMechanicId: source?.assignedMechanicId ?? "",
     date: source?.date ?? new Date().toISOString().slice(0, 10),
     time: source?.time ?? "08:00",
     type: source?.type ?? "ingreso_servicio",

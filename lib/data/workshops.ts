@@ -2,6 +2,12 @@ import type { Route } from "next";
 import { redirect } from "next/navigation";
 
 import { getAppSession } from "@/lib/auth/session";
+import {
+  isEmailIdentifier,
+  normalizeLoginIdentifier,
+  normalizeSessionEmail,
+  normalizeSessionPhone,
+} from "@/lib/auth/session-utils";
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
 import type { WorkshopRole } from "@/lib/permissions";
 import {
@@ -41,12 +47,40 @@ export type WorkshopRecord = {
 export type WorkshopMemberRecord = {
   id: string;
   workshop_id: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
   full_name: string;
   role: WorkshopRole;
+  mechanic_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type WorkshopInviteRecord = {
+  id: string;
+  workshop_id: string;
+  full_name: string;
+  role: Exclude<WorkshopRole, "owner">;
+  email: string | null;
+  phone: string | null;
+  mechanic_id: string | null;
+  invited_by_name: string;
+  message: string | null;
+  status: "pending" | "accepted" | "cancelled";
+  invited_at: string;
+  accepted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WorkshopAccessControlData = {
+  members: WorkshopMemberRecord[];
+  invites: WorkshopInviteRecord[];
+  mechanicOptions: Array<{
+    id: string;
+    label: string;
+  }>;
 };
 
 export type CurrentWorkshopAccess = {
@@ -87,6 +121,54 @@ type DashboardStats = {
       expenses: number;
     }>;
   };
+};
+
+export type MechanicDashboardData = {
+  activeOrders: number;
+  upcomingAppointments: number;
+  pendingCommissionAmount: number;
+  paidCommissionAmount: number;
+  assignedWorkOrders: Array<{
+    id: string;
+    title: string;
+    status: string;
+    vehicleLabel: string | null;
+    promisedDate: string | null;
+  }>;
+  appointments: Array<{
+    id: string;
+    date: string;
+    time: string;
+    clientName: string | null;
+    vehicleLabel: string | null;
+    status: string;
+  }>;
+};
+
+export type TeamLeadDashboardData = {
+  unassignedOrders: number;
+  activeMechanics: number;
+  todayAppointments: number;
+  mechanics: Array<{
+    id: string;
+    fullName: string;
+    activeOrders: number;
+    completedOrders: number;
+  }>;
+};
+
+export type ReceptionDashboardData = {
+  newLeads: number;
+  pendingQuotes: number;
+  readyDeliveries: number;
+  todayAppointments: number;
+};
+
+export type FinanceDashboardData = {
+  collectedThisMonth: number;
+  expensesThisMonth: number;
+  pendingBalances: number;
+  netThisMonth: number;
 };
 
 type RecentOrderRow = {
@@ -237,19 +319,69 @@ async function ensureUniquePublicSlug(
   }
 }
 
-export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess | null> {
-  const session = await getAppSession();
+function normalizeOptionalEmail(email?: string | null) {
+  const value = email?.trim();
+  return value ? normalizeSessionEmail(value) : null;
+}
 
-  if (!session) {
+function normalizeOptionalPhone(phone?: string | null) {
+  const digits = phone ? normalizeSessionPhone(phone) : "";
+  return digits || null;
+}
+
+async function ensureMechanicProfileForInvite(params: {
+  workshopId: string;
+  fullName: string;
+  phone?: string | null;
+  role: Exclude<WorkshopRole, "owner">;
+  mechanicId?: string | null;
+}) {
+  if (params.mechanicId) {
+    return params.mechanicId;
+  }
+
+  if (!["mechanic", "jefe_taller", "recepcion"].includes(params.role)) {
     return null;
   }
 
   const supabase = await createSupabaseDataClient();
+  const mechanicRole =
+    params.role === "mechanic"
+      ? "mecanico"
+      : params.role === "jefe_taller"
+        ? "jefe_taller"
+        : "recepcion";
+
   const { data, error } = await supabase
-    .from("workshops")
-    .select("*")
-    .eq("owner_email", session.user.email)
-    .maybeSingle();
+    .from("mechanics")
+    .insert({
+      workshop_id: params.workshopId,
+      full_name: params.fullName,
+      phone: normalizeOptionalPhone(params.phone),
+      role: mechanicRole,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as { id: string }).id;
+}
+
+async function findMemberByIdentifier(identifier: string) {
+  const supabase = await createSupabaseDataClient();
+  const normalizedIdentifier = normalizeLoginIdentifier(identifier);
+  const query = supabase
+    .from("workshop_members")
+    .select("*, workshops(*)")
+    .eq("is_active", true);
+
+  const { data, error } = await (isEmailIdentifier(normalizedIdentifier)
+    ? query.eq("email", normalizeSessionEmail(normalizedIdentifier)).maybeSingle()
+    : query.eq("phone", normalizeSessionPhone(normalizedIdentifier)).maybeSingle());
 
   if (error) {
     if (isMissingRelationError(error)) {
@@ -259,38 +391,136 @@ export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess 
     throw error;
   }
 
-  const ownedWorkshop = (data as WorkshopRecord | null) ?? null;
+  return (
+    (data as (WorkshopMemberRecord & {
+      workshops: WorkshopRecord | WorkshopRecord[] | null;
+    }) | null) ?? null
+  );
+}
 
-  if (ownedWorkshop) {
-    return {
-      workshop: ownedWorkshop,
-      role: "owner",
-      member: null,
-    };
+export async function acceptWorkshopInviteForIdentifier(identifier: string) {
+  const normalizedIdentifier = normalizeLoginIdentifier(identifier);
+
+  if (!normalizedIdentifier) {
+    return null;
   }
 
-  const { data: memberData, error: memberError } = await supabase
-    .from("workshop_members")
-    .select("*, workshops(*)")
-    .eq("email", session.user.email)
-    .eq("is_active", true)
-    .maybeSingle();
+  const existingMembership = await findMemberByIdentifier(normalizedIdentifier);
 
-  if (memberError) {
-    if (isMissingRelationError(memberError)) {
+  if (existingMembership) {
+    return existingMembership;
+  }
+
+  const supabase = await createSupabaseDataClient();
+  const inviteQuery = supabase
+    .from("workshop_member_invites")
+    .select("*")
+    .eq("status", "pending")
+    .order("invited_at", { ascending: false })
+    .limit(1);
+
+  const { data, error } = await (isEmailIdentifier(normalizedIdentifier)
+    ? inviteQuery.eq("email", normalizeSessionEmail(normalizedIdentifier)).maybeSingle()
+    : inviteQuery.eq("phone", normalizeSessionPhone(normalizedIdentifier)).maybeSingle());
+
+  if (error) {
+    if (isMissingRelationError(error)) {
       return null;
     }
 
+    throw error;
+  }
+
+  const invite = (data as WorkshopInviteRecord | null) ?? null;
+
+  if (!invite) {
+    return null;
+  }
+
+  const mechanicId =
+    invite.mechanic_id ??
+    (await ensureMechanicProfileForInvite({
+      workshopId: invite.workshop_id,
+      fullName: invite.full_name,
+      phone: invite.phone,
+      role: invite.role,
+    }));
+
+  const memberPayload = {
+    workshop_id: invite.workshop_id,
+    full_name: invite.full_name,
+    role: invite.role,
+    email: normalizeOptionalEmail(invite.email),
+    phone: normalizeOptionalPhone(invite.phone),
+    mechanic_id: mechanicId,
+    is_active: true,
+  };
+
+  const { error: memberError } = await supabase.from("workshop_members").insert(memberPayload);
+
+  if (memberError) {
     throw memberError;
   }
 
-  const membership = (memberData as (WorkshopMemberRecord & { workshops: WorkshopRecord | WorkshopRecord[] | null }) | null) ?? null;
+  const { error: inviteError } = await supabase
+    .from("workshop_member_invites")
+    .update({
+      status: "accepted",
+      accepted_at: new Date().toISOString(),
+      mechanic_id: mechanicId,
+    })
+    .eq("id", invite.id);
+
+  if (inviteError) {
+    throw inviteError;
+  }
+
+  return findMemberByIdentifier(normalizedIdentifier);
+}
+
+export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess | null> {
+  const session = await getAppSession();
+
+  if (!session) {
+    return null;
+  }
+
+  if (session.user.email) {
+    const supabase = await createSupabaseDataClient();
+    const { data, error } = await supabase
+      .from("workshops")
+      .select("*")
+      .eq("owner_email", session.user.email)
+      .maybeSingle();
+
+    if (error) {
+      if (isMissingRelationError(error)) {
+        return null;
+      }
+
+      throw error;
+    }
+
+    const ownedWorkshop = (data as WorkshopRecord | null) ?? null;
+
+    if (ownedWorkshop) {
+      return {
+        workshop: ownedWorkshop,
+        role: "owner",
+        member: null,
+      };
+    }
+  }
+
+  const membership = await findMemberByIdentifier(session.user.loginIdentifier);
 
   if (!membership) {
     return null;
   }
 
-  const workshop = Array.isArray(membership.workshops) ? membership.workshops[0] ?? null : membership.workshops;
+  const workshop = Array.isArray(membership.workshops)
+    ? membership.workshops[0] ?? null
+    : membership.workshops;
 
   if (!workshop) {
     return null;
@@ -303,8 +533,10 @@ export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess 
       id: membership.id,
       workshop_id: membership.workshop_id,
       email: membership.email,
+      phone: membership.phone,
       full_name: membership.full_name,
       role: membership.role,
+      mechanic_id: membership.mechanic_id,
       is_active: membership.is_active,
       created_at: membership.created_at,
       updated_at: membership.updated_at,
@@ -335,8 +567,8 @@ export async function requireCurrentWorkshop() {
 export async function upsertCurrentWorkshop(input: WorkshopProfileInput) {
   const session = await getAppSession();
 
-  if (!session) {
-    throw new Error("Sesion no disponible.");
+  if (!session?.user.email) {
+    throw new Error("Solo el propietario puede completar el onboarding del taller.");
   }
 
   const supabase = await createSupabaseDataClient();
@@ -391,6 +623,142 @@ export async function upsertCurrentWorkshop(input: WorkshopProfileInput) {
   }
 
   return data as WorkshopRecord;
+}
+
+export async function getWorkshopAccessControlData(): Promise<WorkshopAccessControlData> {
+  const access = await getCurrentWorkshopAccess();
+
+  if (!access) {
+    return {
+      members: [],
+      invites: [],
+      mechanicOptions: [],
+    };
+  }
+
+  const supabase = await createSupabaseDataClient();
+  const [membersResult, invitesResult, mechanicsResult] = await Promise.all([
+    supabase
+      .from("workshop_members")
+      .select("*")
+      .eq("workshop_id", access.workshop.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("workshop_member_invites")
+      .select("*")
+      .eq("workshop_id", access.workshop.id)
+      .order("invited_at", { ascending: false }),
+    supabase
+      .from("mechanics")
+      .select("id,full_name,role")
+      .eq("workshop_id", access.workshop.id)
+      .eq("is_active", true)
+      .order("full_name", { ascending: true }),
+  ]);
+
+  const nonMissingError = [membersResult.error, invitesResult.error, mechanicsResult.error].find(
+    (error) => error && !isMissingRelationError(error),
+  );
+
+  if (nonMissingError) {
+    throw nonMissingError;
+  }
+
+  return {
+    members: (membersResult.data as WorkshopMemberRecord[] | null) ?? [],
+    invites: (invitesResult.data as WorkshopInviteRecord[] | null) ?? [],
+    mechanicOptions:
+      ((mechanicsResult.data as Array<{ id: string; full_name: string; role: string }> | null) ?? []).map(
+        (mechanic) => ({
+          id: mechanic.id,
+          label: `${mechanic.full_name} · ${mechanic.role}`,
+        }),
+      ),
+  };
+}
+
+export async function inviteWorkshopMember(values: {
+  fullName: string;
+  role: Exclude<WorkshopRole, "owner">;
+  email?: string | null;
+  phone?: string | null;
+  mechanicId?: string | null;
+  message?: string | null;
+}) {
+  const access = await getCurrentWorkshopAccess();
+
+  if (!access || access.role !== "owner") {
+    throw new Error("Solo el propietario puede invitar al equipo.");
+  }
+
+  const email = normalizeOptionalEmail(values.email);
+  const phone = normalizeOptionalPhone(values.phone);
+
+  if (!email && !phone) {
+    throw new Error("Agrega correo o telefono para invitar al integrante.");
+  }
+
+  const supabase = await createSupabaseDataClient();
+  const existingMemberQuery = supabase
+    .from("workshop_members")
+    .select("*")
+    .eq("workshop_id", access.workshop.id)
+    .eq("is_active", true)
+    .limit(1);
+
+  const { data: existingMemberData, error: existingMemberError } = await (email
+    ? existingMemberQuery.eq("email", email).maybeSingle()
+    : existingMemberQuery.eq("phone", phone).maybeSingle());
+
+  if (existingMemberError && !isMissingRelationError(existingMemberError)) {
+    throw existingMemberError;
+  }
+
+  const mechanicId =
+    values.mechanicId ??
+    (await ensureMechanicProfileForInvite({
+      workshopId: access.workshop.id,
+      fullName: values.fullName,
+      phone,
+      role: values.role,
+      mechanicId: values.mechanicId,
+    }));
+
+  if (existingMemberData) {
+    const { error } = await supabase
+      .from("workshop_members")
+      .update({
+        full_name: values.fullName,
+        role: values.role,
+        email,
+        phone,
+        mechanic_id: mechanicId,
+      })
+      .eq("id", (existingMemberData as WorkshopMemberRecord).id);
+
+    if (error) {
+      throw error;
+    }
+
+    return { kind: "updated" as const };
+  }
+
+  const { error } = await supabase.from("workshop_member_invites").insert({
+    workshop_id: access.workshop.id,
+    full_name: values.fullName,
+    role: values.role,
+    email,
+    phone,
+    mechanic_id: mechanicId,
+    invited_by_name: access.member?.full_name ?? access.workshop.owner_name,
+    message: values.message?.trim() || null,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return { kind: "invited" as const };
 }
 
 export async function getPublicWorkshopBySlug(slug: string) {
@@ -559,5 +927,244 @@ export async function getDashboardStats(workshopId: string): Promise<DashboardSt
       quotesByStatus,
       cashflowTrend,
     },
+  };
+}
+
+export async function getMechanicDashboardData(workshopId: string, mechanicId: string): Promise<MechanicDashboardData> {
+  const supabase = await createSupabaseDataClient();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [workOrdersResult, appointmentsResult, commissionsResult] = await Promise.all([
+    supabase
+      .from("work_orders")
+      .select("id,title,status,vehicle_label,promised_date")
+      .eq("workshop_id", workshopId)
+      .eq("assigned_mechanic_id", mechanicId)
+      .order("promised_date", { ascending: true, nullsFirst: false })
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("appointments")
+      .select("id,appointment_date,appointment_time,status,clients(full_name),vehicles(vehicle_label,plate)")
+      .eq("workshop_id", workshopId)
+      .eq("assigned_mechanic_id", mechanicId)
+      .gte("appointment_date", today)
+      .order("appointment_date", { ascending: true })
+      .order("appointment_time", { ascending: true })
+      .limit(6),
+    supabase
+      .from("commissions")
+      .select("amount,status")
+      .eq("workshop_id", workshopId)
+      .eq("mechanic_id", mechanicId),
+  ]);
+
+  const nonMissingError = [workOrdersResult.error, appointmentsResult.error, commissionsResult.error].find(
+    (error) => error && !isMissingRelationError(error),
+  );
+
+  if (nonMissingError) {
+    throw nonMissingError;
+  }
+
+  const workOrders =
+    ((workOrdersResult.data as Array<{
+      id: string;
+      title: string;
+      status: string;
+      vehicle_label: string | null;
+      promised_date: string | null;
+    }> | null) ?? []);
+  const appointments =
+    ((appointmentsResult.data as Array<{
+      id: string;
+      appointment_date: string;
+      appointment_time: string;
+      status: string;
+      clients: { full_name: string } | { full_name: string }[] | null;
+      vehicles:
+        | { vehicle_label: string | null; plate: string | null }
+        | { vehicle_label: string | null; plate: string | null }[]
+        | null;
+    }> | null) ?? []);
+  const commissions =
+    ((commissionsResult.data as Array<{ amount: number | string | null; status: string }> | null) ?? []);
+
+  const activeOrders = workOrders.filter((order) => !["completada", "cancelada"].includes(order.status)).length;
+
+  return {
+    activeOrders,
+    upcomingAppointments: appointments.length,
+    pendingCommissionAmount: commissions
+      .filter((item) => item.status !== "paid")
+      .reduce((total, item) => total + Number(item.amount ?? 0), 0),
+    paidCommissionAmount: commissions
+      .filter((item) => item.status === "paid")
+      .reduce((total, item) => total + Number(item.amount ?? 0), 0),
+    assignedWorkOrders: workOrders.slice(0, 6).map((order) => ({
+      id: order.id,
+      title: order.title,
+      status: formatDashboardStatus(order.status),
+      vehicleLabel: order.vehicle_label,
+      promisedDate: order.promised_date,
+    })),
+    appointments: appointments.map((appointment) => {
+      const client = Array.isArray(appointment.clients)
+        ? appointment.clients[0] ?? null
+        : appointment.clients;
+      const vehicle = Array.isArray(appointment.vehicles)
+        ? appointment.vehicles[0] ?? null
+        : appointment.vehicles;
+
+      return {
+        id: appointment.id,
+        date: appointment.appointment_date,
+        time: appointment.appointment_time.slice(0, 5),
+        clientName: client?.full_name ?? null,
+        vehicleLabel: vehicle?.vehicle_label ?? vehicle?.plate ?? null,
+        status: appointment.status,
+      };
+    }),
+  };
+}
+
+export async function getTeamLeadDashboardData(workshopId: string): Promise<TeamLeadDashboardData> {
+  const supabase = await createSupabaseDataClient();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [mechanicsResult, workOrdersResult, appointmentsResult] = await Promise.all([
+    supabase
+      .from("mechanics")
+      .select("id,full_name,is_active")
+      .eq("workshop_id", workshopId)
+      .eq("is_active", true)
+      .order("full_name", { ascending: true }),
+    supabase
+      .from("work_orders")
+      .select("id,status,assigned_mechanic_id")
+      .eq("workshop_id", workshopId),
+    supabase
+      .from("appointments")
+      .select("id")
+      .eq("workshop_id", workshopId)
+      .eq("appointment_date", today),
+  ]);
+
+  const nonMissingError = [mechanicsResult.error, workOrdersResult.error, appointmentsResult.error].find(
+    (error) => error && !isMissingRelationError(error),
+  );
+
+  if (nonMissingError) {
+    throw nonMissingError;
+  }
+
+  const mechanics =
+    ((mechanicsResult.data as Array<{ id: string; full_name: string; is_active: boolean }> | null) ?? []);
+  const workOrders =
+    ((workOrdersResult.data as Array<{
+      id: string;
+      status: string;
+      assigned_mechanic_id: string | null;
+    }> | null) ?? []);
+
+  return {
+    unassignedOrders: workOrders.filter(
+      (order) => !order.assigned_mechanic_id && !["completada", "cancelada"].includes(order.status),
+    ).length,
+    activeMechanics: mechanics.length,
+    todayAppointments: ((appointmentsResult.data as Array<{ id: string }> | null) ?? []).length,
+    mechanics: mechanics.map((mechanic) => ({
+      id: mechanic.id,
+      fullName: mechanic.full_name,
+      activeOrders: workOrders.filter(
+        (order) =>
+          order.assigned_mechanic_id === mechanic.id &&
+          !["completada", "cancelada"].includes(order.status),
+      ).length,
+      completedOrders: workOrders.filter(
+        (order) => order.assigned_mechanic_id === mechanic.id && order.status === "completada",
+      ).length,
+    })),
+  };
+}
+
+export async function getReceptionDashboardData(workshopId: string): Promise<ReceptionDashboardData> {
+  const supabase = await createSupabaseDataClient();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [quotesResult, workOrdersResult, appointmentsResult, inquiriesResult] = await Promise.all([
+    supabase.from("quotes").select("id,status").eq("workshop_id", workshopId),
+    supabase.from("work_orders").select("id,status").eq("workshop_id", workshopId),
+    supabase
+      .from("appointments")
+      .select("id")
+      .eq("workshop_id", workshopId)
+      .eq("appointment_date", today),
+    supabase
+      .from("marketplace_inquiries")
+      .select("id,status")
+      .eq("workshop_id", workshopId),
+  ]);
+
+  const nonMissingError = [quotesResult.error, workOrdersResult.error, appointmentsResult.error, inquiriesResult.error].find(
+    (error) => error && !isMissingRelationError(error),
+  );
+
+  if (nonMissingError) {
+    throw nonMissingError;
+  }
+
+  const quotes = (quotesResult.data as Array<{ id: string; status: string }> | null) ?? [];
+  const workOrders = (workOrdersResult.data as Array<{ id: string; status: string }> | null) ?? [];
+  const inquiries = (inquiriesResult.data as Array<{ id: string; status: string }> | null) ?? [];
+
+  return {
+    newLeads: inquiries.filter((item) => item.status === "new").length,
+    pendingQuotes: quotes.filter((item) => ["draft", "sent"].includes(item.status)).length,
+    readyDeliveries: workOrders.filter((item) => item.status === "listo_para_entrega").length,
+    todayAppointments: ((appointmentsResult.data as Array<{ id: string }> | null) ?? []).length,
+  };
+}
+
+export async function getFinanceDashboardData(workshopId: string): Promise<FinanceDashboardData> {
+  const supabase = await createSupabaseDataClient();
+  const currentMonthKey = getMonthKey(new Date().toISOString());
+
+  const [paymentsResult, expensesResult, workOrdersResult] = await Promise.all([
+    supabase.from("payments").select("amount,status,paid_at").eq("workshop_id", workshopId),
+    supabase.from("expenses").select("amount,spent_at").eq("workshop_id", workshopId),
+    supabase.from("work_orders").select("total_amount,status").eq("workshop_id", workshopId),
+  ]);
+
+  const nonMissingError = [paymentsResult.error, expensesResult.error, workOrdersResult.error].find(
+    (error) => error && !isMissingRelationError(error),
+  );
+
+  if (nonMissingError) {
+    throw nonMissingError;
+  }
+
+  const payments = (paymentsResult.data as PaymentRow[] | null) ?? [];
+  const expenses = (expensesResult.data as ExpenseRow[] | null) ?? [];
+  const workOrders =
+    ((workOrdersResult.data as Array<{ total_amount: number | string | null; status: string }> | null) ?? []);
+
+  const collectedThisMonth = payments
+    .filter((payment) => ["paid", "partial"].includes(payment.status ?? ""))
+    .filter((payment) => getMonthKey(payment.paid_at) === currentMonthKey)
+    .reduce((total, payment) => total + Number(payment.amount ?? 0), 0);
+
+  const expensesThisMonth = expenses
+    .filter((expense) => getMonthKey(expense.spent_at) === currentMonthKey)
+    .reduce((total, expense) => total + Number(expense.amount ?? 0), 0);
+
+  const pendingBalances = workOrders
+    .filter((order) => !["completada", "cancelada"].includes(order.status))
+    .reduce((total, order) => total + Number(order.total_amount ?? 0), 0);
+
+  return {
+    collectedThisMonth,
+    expensesThisMonth,
+    pendingBalances,
+    netThisMonth: Number((collectedThisMonth - expensesThisMonth).toFixed(2)),
   };
 }

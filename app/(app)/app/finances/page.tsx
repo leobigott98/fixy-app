@@ -1,5 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight, LayoutGrid, Receipt, TableProperties, Wallet } from "lucide-react";
 
 import { KpiCard } from "@/components/dashboard/kpi-card";
@@ -16,8 +17,9 @@ import {
   getFinancesOverview,
   getPaymentReceiptHref,
 } from "@/lib/data/finances";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
 import { getExpenseCategoryLabel, getPaymentMethodLabel } from "@/lib/finances/constants";
+import { hasModuleAccess } from "@/lib/permissions";
 import { formatCurrencyDisplay } from "@/lib/utils";
 import { getPreferredListView } from "@/lib/view-preferences";
 
@@ -46,6 +48,12 @@ function buildViewHref(view: "cards" | "table", query?: string) {
 
 export default async function FinancesPage({ searchParams }: FinancesPageProps) {
   const workshop = await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
+
+  if (!hasModuleAccess(access?.role ?? "mechanic", "finances")) {
+    redirect("/app/dashboard");
+  }
+
   const params = await searchParams;
   const query = getQueryValue(params.q);
   const view = await getPreferredListView(getQueryValue(params.view));

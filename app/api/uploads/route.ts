@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   }
 
   const workshop = await getCurrentWorkshop();
-  const workspaceKey = workshop?.id ?? sanitizeUploadPathSegment(session.user.email);
+  const workspaceKey = workshop?.id ?? sanitizeUploadPathSegment(session.user.loginIdentifier);
   const supabase = createSupabaseAdminClient();
 
   const uploadedFiles = [];

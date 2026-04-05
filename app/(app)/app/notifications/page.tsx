@@ -1,4 +1,5 @@
 import type { Route } from "next";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { Bell, LayoutGrid, MapPin, MessageCircleMore, PhoneCall, TableProperties, Wrench } from "lucide-react";
 
@@ -9,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getWorkshopNotifications } from "@/lib/data/marketplace";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
+import { hasModuleAccess } from "@/lib/permissions";
 import { getPreferredListView } from "@/lib/view-preferences";
 import { buildWhatsAppHref } from "@/lib/whatsapp";
 
@@ -40,6 +42,12 @@ function getContactHref(phone: string) {
 
 export default async function NotificationsPage({ searchParams }: NotificationsPageProps) {
   const workshop = await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
+
+  if (!hasModuleAccess(access?.role ?? "mechanic", "notifications")) {
+    redirect("/app/dashboard");
+  }
+
   const params = await searchParams;
   const view = await getPreferredListView(getQueryValue(params.view));
   const notifications = await getWorkshopNotifications(workshop.id);

@@ -13,7 +13,7 @@ import {
   type AppointmentInput,
 } from "@/lib/appointments/schema";
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
 
 type ClientLite = {
   id: string;
@@ -37,6 +37,7 @@ export type AppointmentRecord = {
   workshop_id: string;
   client_id: string | null;
   vehicle_id: string | null;
+  assigned_mechanic_id: string | null;
   appointment_date: string;
   appointment_time: string;
   appointment_type: AppointmentType;
@@ -88,6 +89,10 @@ export type AppointmentFormOptions = {
   vehicles: Array<{
     id: string;
     clientId: string | null;
+    label: string;
+  }>;
+  mechanics: Array<{
+    id: string;
     label: string;
   }>;
 };
@@ -190,20 +195,35 @@ function normalizeAppointmentRow(row: AppointmentRowWithRelations): AppointmentL
 
 async function validateAppointmentRelations(input: AppointmentInput) {
   const workshop = await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
   const supabase = await createSupabaseDataClient();
 
-  const { data: vehicleData, error: vehicleError } = await supabase
-    .from("vehicles")
-    .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
-    .eq("workshop_id", workshop.id)
-    .eq("id", input.vehicleId)
-    .maybeSingle();
+  const [vehicleResult, mechanicResult] = await Promise.all([
+    supabase
+      .from("vehicles")
+      .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
+      .eq("workshop_id", workshop.id)
+      .eq("id", input.vehicleId)
+      .maybeSingle(),
+    input.assignedMechanicId
+      ? supabase
+          .from("mechanics")
+          .select("id,is_active")
+          .eq("workshop_id", workshop.id)
+          .eq("id", input.assignedMechanicId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
 
-  if (vehicleError) {
-    throw vehicleError;
+  if (vehicleResult.error) {
+    throw vehicleResult.error;
   }
 
-  const vehicle = (vehicleData as VehicleLite | null) ?? null;
+  if (mechanicResult.error && !isMissingRelationError(mechanicResult.error)) {
+    throw mechanicResult.error;
+  }
+
+  const vehicle = (vehicleResult.data as VehicleLite | null) ?? null;
 
   if (!vehicle) {
     throw new Error("Selecciona un vehiculo valido.");
@@ -211,6 +231,20 @@ async function validateAppointmentRelations(input: AppointmentInput) {
 
   if (vehicle.client_id !== input.clientId) {
     throw new Error("El vehiculo seleccionado no pertenece al cliente.");
+  }
+
+  const mechanic = (mechanicResult.data as { id: string; is_active: boolean } | null) ?? null;
+
+  if (input.assignedMechanicId && !mechanic) {
+    throw new Error("Selecciona un responsable valido.");
+  }
+
+  if (mechanic && !mechanic.is_active) {
+    throw new Error("El responsable seleccionado esta inactivo.");
+  }
+
+  if (access?.role === "mechanic") {
+    throw new Error("Tu rol no puede editar citas.");
   }
 
   return {
@@ -222,7 +256,7 @@ export async function getAppointmentFormOptions(): Promise<AppointmentFormOption
   const workshop = await requireCurrentWorkshop();
   const supabase = await createSupabaseDataClient();
 
-  const [clientsResult, vehiclesResult] = await Promise.all([
+  const [clientsResult, vehiclesResult, mechanicsResult] = await Promise.all([
     supabase
       .from("clients")
       .select("id,full_name,whatsapp_phone")
@@ -233,9 +267,15 @@ export async function getAppointmentFormOptions(): Promise<AppointmentFormOption
       .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
       .eq("workshop_id", workshop.id)
       .order("updated_at", { ascending: false }),
+    supabase
+      .from("mechanics")
+      .select("id,full_name,role")
+      .eq("workshop_id", workshop.id)
+      .eq("is_active", true)
+      .order("full_name"),
   ]);
 
-  const nonMissingError = [clientsResult.error, vehiclesResult.error].find(
+  const nonMissingError = [clientsResult.error, vehiclesResult.error, mechanicsResult.error].find(
     (error) => error && !isMissingRelationError(error),
   );
 
@@ -260,6 +300,12 @@ export async function getAppointmentFormOptions(): Promise<AppointmentFormOption
         vehicle.vehicle_label ??
         [vehicle.make, vehicle.model, vehicle.vehicle_year, vehicle.plate].filter(Boolean).join(" "),
     }))),
+    mechanics: (((mechanicsResult.data as Array<{ id: string; full_name: string; role: string }> | null) ?? []).map(
+      (mechanic) => ({
+        id: mechanic.id,
+        label: `${mechanic.full_name} · ${mechanic.role}`,
+      }),
+    )),
   };
 }
 
@@ -268,17 +314,40 @@ export async function getCalendarViewData(params: {
   scope: "day" | "week" | "month";
 }): Promise<CalendarViewData> {
   const workshop = await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
   const supabase = await createSupabaseDataClient();
   const scopeDates = getScopeDates(params.selectedDate, params.scope);
 
-  const { data, error } = await supabase
+  let calendarQuery = supabase
     .from("appointments")
-    .select("*, clients(id,full_name,phone,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year)")
+    .select(
+      "*, clients(id,full_name,phone,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year)",
+    )
     .eq("workshop_id", workshop.id)
     .gte("appointment_date", scopeDates.start)
     .lte("appointment_date", scopeDates.end)
     .order("appointment_date", { ascending: true })
     .order("appointment_time", { ascending: true });
+
+  if (access?.role === "mechanic") {
+    if (!access.member?.mechanic_id) {
+      return {
+        scope: params.scope,
+        selectedDate: params.selectedDate,
+        summary: buildSummary([]),
+        dayBuckets: scopeDates.dates.map((date) => ({
+          date,
+          label: formatDayLabel(date),
+          shortLabel: formatDayLabel(date, true),
+          appointments: [],
+        })),
+      };
+    }
+
+    calendarQuery = calendarQuery.eq("assigned_mechanic_id", access.member.mechanic_id);
+  }
+
+  const { data, error } = await calendarQuery;
 
   if (error) {
     if (isMissingRelationError(error)) {
@@ -319,14 +388,24 @@ export async function getCalendarViewData(params: {
 
 export async function getAppointmentForEdit(appointmentId: string) {
   const workshop = await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
   const supabase = await createSupabaseDataClient();
 
-  const { data, error } = await supabase
+  let appointmentQuery = supabase
     .from("appointments")
     .select("*")
     .eq("workshop_id", workshop.id)
-    .eq("id", appointmentId)
-    .maybeSingle();
+    .eq("id", appointmentId);
+
+  if (access?.role === "mechanic") {
+    if (!access.member?.mechanic_id) {
+      notFound();
+    }
+
+    appointmentQuery = appointmentQuery.eq("assigned_mechanic_id", access.member.mechanic_id);
+  }
+
+  const { data, error } = await appointmentQuery.maybeSingle();
 
   if (error) {
     if (isMissingRelationError(error)) {
@@ -352,6 +431,7 @@ export async function upsertAppointment(values: AppointmentFormValues, appointme
     workshop_id: workshop.id,
     client_id: input.clientId,
     vehicle_id: input.vehicleId,
+    assigned_mechanic_id: input.assignedMechanicId,
     appointment_date: input.date,
     appointment_time: input.time,
     appointment_type: input.type,

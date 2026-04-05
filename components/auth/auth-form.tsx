@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { buildSessionCookieString } from "@/lib/auth/session-utils";
+import { forgotPasswordAction, loginAction, signupAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -57,7 +57,10 @@ export function AuthForm({ variant }: AuthFormProps) {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const schema = z.object({
-    email: z.string().email("Ingresa un correo valido."),
+    identifier:
+      variant === "signup"
+        ? z.string().email("Ingresa un correo valido.")
+        : z.string().trim().min(4, "Ingresa tu correo o telefono."),
     password:
       variant === "forgot-password"
         ? z.string().optional()
@@ -84,30 +87,32 @@ export function AuthForm({ variant }: AuthFormProps) {
 
   const onSubmit = handleSubmit(async (values) => {
     if (variant === "forgot-password") {
-      setFeedback(`Enlace enviado a ${values.email}. En Sprint 1 se conecta con Supabase Auth.`);
+      const result = await forgotPasswordAction({ identifier: values.identifier });
+      setFeedback(result.message);
       return;
     }
 
-    document.cookie = buildSessionCookieString(values.email);
-    setFeedback("Acceso demo activado. En Sprint 1 esto se reemplaza por Supabase Auth real.");
+    const result =
+      variant === "signup"
+        ? await signupAction({
+            email: values.identifier,
+            password: values.password ?? "",
+            name: values.name,
+            workshopName: values.workshopName,
+          })
+        : await loginAction({
+            identifier: values.identifier,
+            password: values.password ?? "",
+          });
+
+    setFeedback(result.message);
+
+    if (!result.success) {
+      return;
+    }
 
     startTransition(() => {
-      if (variant === "signup") {
-        const params = new URLSearchParams();
-
-        if (values.name) {
-          params.set("ownerName", values.name);
-        }
-
-        if (values.workshopName) {
-          params.set("workshopName", values.workshopName);
-        }
-
-        router.push(`/app/onboarding?${params.toString()}` as Route);
-        return;
-      }
-
-      router.push("/app" as Route);
+      router.push(result.redirectTo as Route);
     });
   });
 
@@ -131,9 +136,14 @@ export function AuthForm({ variant }: AuthFormProps) {
           ) : null}
 
           <Field
-            label="Correo"
-            error={errors.email?.message}
-            input={<Input placeholder="taller@fixy.app" {...register("email")} />}
+            label={variant === "signup" ? "Correo" : "Correo o telefono"}
+            error={errors.identifier?.message}
+            input={
+              <Input
+                placeholder={variant === "signup" ? "taller@fixy.app" : "taller@fixy.app o 04141234567"}
+                {...register("identifier")}
+              />
+            }
           />
 
           {variant !== "forgot-password" ? (
