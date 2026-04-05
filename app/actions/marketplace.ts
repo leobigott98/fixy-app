@@ -4,10 +4,18 @@ import { revalidatePath } from "next/cache";
 
 import {
   createMarketplaceInquiry,
+  createMarketplaceReview,
   markMarketplaceInquiryAsContacted,
+  respondToWorkshopReview,
 } from "@/lib/data/marketplace";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
-import { marketplaceInquirySchema, type MarketplaceInquiryInput } from "@/lib/marketplace/schema";
+import {
+  marketplaceInquirySchema,
+  marketplaceReviewSchema,
+  workshopReviewResponseSchema,
+  type MarketplaceInquiryInput,
+  type MarketplaceReviewInput,
+} from "@/lib/marketplace/schema";
 import { buildWorkshopPublicPath } from "@/lib/workshops/schema";
 import { buildWhatsAppHref } from "@/lib/whatsapp";
 
@@ -73,4 +81,65 @@ export async function markMarketplaceInquiryAsContactedAction(inquiryId: string)
   revalidatePath("/app");
   revalidatePath("/app/dashboard");
   revalidatePath("/app/notifications");
+}
+
+type SubmitMarketplaceReviewResult =
+  | {
+      success: true;
+      message: string;
+    }
+  | {
+      success: false;
+      message: string;
+      fieldErrors?: Record<string, string[] | undefined>;
+    };
+
+export async function submitMarketplaceReviewAction(
+  workshopSlug: string,
+  values: MarketplaceReviewInput,
+): Promise<SubmitMarketplaceReviewResult> {
+  const parsed = marketplaceReviewSchema.safeParse(values);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: "Revisa tu resena antes de enviarla.",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    const result = await createMarketplaceReview(workshopSlug, parsed.data);
+
+    revalidatePath(buildWorkshopPublicPath(result.workshop.public_slug));
+    revalidatePath("/app/reviews");
+
+    return {
+      success: true,
+      message: "Resena publicada. Gracias por compartir tu experiencia.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "No se pudo publicar la resena en este momento.",
+    };
+  }
+}
+
+export async function respondToWorkshopReviewAction(reviewId: string, formData: FormData) {
+  const workshop = await requireCurrentWorkshop();
+  const parsed = workshopReviewResponseSchema.parse({
+    response: formData.get("response"),
+  });
+
+  await respondToWorkshopReview(reviewId, workshop.id, parsed);
+
+  revalidatePath("/app/reviews");
+  if (workshop.public_slug) {
+    revalidatePath(buildWorkshopPublicPath(workshop.public_slug));
+  }
+  revalidatePath("/talleres");
 }

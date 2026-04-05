@@ -9,6 +9,7 @@ import {
   Gauge,
   Bell,
   ShoppingCart,
+  Star,
   Settings,
   Truck,
   UsersRound,
@@ -80,6 +81,11 @@ export const primaryNavigation = [
     title: "Solicitudes",
     href: "/app/notifications" as Route,
     icon: Bell,
+  },
+  {
+    title: "Resenas",
+    href: "/app/reviews" as Route,
+    icon: Star,
   },
   {
     title: "Ajustes",

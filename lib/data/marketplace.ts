@@ -1,5 +1,12 @@
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { marketplaceInquirySchema, type MarketplaceInquiryInput } from "@/lib/marketplace/schema";
+import {
+  marketplaceInquirySchema,
+  marketplaceReviewSchema,
+  workshopReviewResponseSchema,
+  type MarketplaceInquiryInput,
+  type MarketplaceReviewInput,
+  type WorkshopReviewResponseInput,
+} from "@/lib/marketplace/schema";
 import type { WorkshopRecord } from "@/lib/data/workshops";
 import { sendWorkshopInquiryEmail } from "@/lib/notifications/email";
 import { slugifyWorkshopPublicSlug } from "@/lib/workshops/schema";
@@ -30,8 +37,11 @@ type WorkshopReviewRow = {
   id: string;
   workshop_id: string;
   reviewer_name: string;
+  title: string;
   rating: number;
   comment: string | null;
+  workshop_response: string | null;
+  workshop_response_at: string | null;
   created_at: string;
   published_at: string | null;
   status: "pending" | "approved" | "hidden";
@@ -61,8 +71,11 @@ export type MarketplaceReviewSummary = {
 export type MarketplaceReviewCard = {
   id: string;
   reviewerName: string;
+  title: string;
   rating: number;
   comment: string | null;
+  workshopResponse: string | null;
+  workshopResponseAt: string | null;
   publishedAt: string | null;
 };
 
@@ -98,6 +111,17 @@ export type WorkshopNotificationItem = {
   message: string;
   status: "new" | "contacted" | "closed";
   createdAt: string;
+};
+
+export type WorkshopReviewManagementItem = {
+  id: string;
+  reviewerName: string;
+  title: string;
+  rating: number;
+  comment: string | null;
+  workshopResponse: string | null;
+  workshopResponseAt: string | null;
+  publishedAt: string | null;
 };
 
 function emptyReviewSummary(): MarketplaceReviewSummary {
@@ -153,7 +177,7 @@ async function getRecentApprovedReviews(workshopId: string) {
   const supabase = await createSupabaseDataClient();
   const { data, error } = await supabase
     .from("workshop_reviews")
-    .select("id,reviewer_name,rating,comment,published_at,created_at,status")
+    .select("id,reviewer_name,title,rating,comment,workshop_response,workshop_response_at,published_at,created_at,status")
     .eq("workshop_id", workshopId)
     .eq("status", "approved")
     .order("published_at", { ascending: false })
@@ -170,8 +194,11 @@ async function getRecentApprovedReviews(workshopId: string) {
   return (((data as WorkshopReviewRow[] | null) ?? []).map((review) => ({
     id: review.id,
     reviewerName: review.reviewer_name,
+    title: review.title,
     rating: Number(review.rating),
     comment: review.comment,
+    workshopResponse: review.workshop_response,
+    workshopResponseAt: review.workshop_response_at,
     publishedAt: review.published_at ?? review.created_at,
   })));
 }
@@ -408,6 +435,100 @@ export async function markMarketplaceInquiryAsContacted(inquiryId: string, works
   if (error) {
     if (isMissingRelationError(error)) {
       throw new Error("La base de solicitudes aun no esta disponible.");
+    }
+
+    throw error;
+  }
+}
+
+export async function createMarketplaceReview(
+  workshopSlug: string,
+  input: MarketplaceReviewInput,
+) {
+  const parsed = marketplaceReviewSchema.parse(input);
+  const workshop = await getMarketplaceWorkshopDetailBySlug(workshopSlug);
+
+  if (!workshop) {
+    throw new Error("El taller ya no esta disponible para recibir resenas.");
+  }
+
+  const supabase = await createSupabaseDataClient();
+  const { data, error } = await supabase
+    .from("workshop_reviews")
+    .insert({
+      workshop_id: workshop.id,
+      reviewer_name: parsed.reviewerName,
+      title: parsed.title,
+      rating: parsed.rating,
+      comment: parsed.comment,
+      status: "approved",
+      published_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      throw new Error("La base de resenas aun no esta disponible.");
+    }
+
+    throw error;
+  }
+
+  return {
+    workshop,
+    review: data as WorkshopReviewRow,
+  };
+}
+
+export async function getWorkshopReviewsForAdmin(workshopId: string) {
+  const supabase = await createSupabaseDataClient();
+  const { data, error } = await supabase
+    .from("workshop_reviews")
+    .select("id,reviewer_name,title,rating,comment,workshop_response,workshop_response_at,published_at,created_at,status")
+    .eq("workshop_id", workshopId)
+    .order("published_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return [] as WorkshopReviewManagementItem[];
+    }
+
+    throw error;
+  }
+
+  return (((data as WorkshopReviewRow[] | null) ?? []).map((review) => ({
+    id: review.id,
+    reviewerName: review.reviewer_name,
+    title: review.title,
+    rating: Number(review.rating),
+    comment: review.comment,
+    workshopResponse: review.workshop_response,
+    workshopResponseAt: review.workshop_response_at,
+    publishedAt: review.published_at ?? review.created_at,
+  })));
+}
+
+export async function respondToWorkshopReview(
+  reviewId: string,
+  workshopId: string,
+  input: WorkshopReviewResponseInput,
+) {
+  const parsed = workshopReviewResponseSchema.parse(input);
+  const supabase = await createSupabaseDataClient();
+  const { error } = await supabase
+    .from("workshop_reviews")
+    .update({
+      workshop_response: parsed.response,
+      workshop_response_at: new Date().toISOString(),
+    })
+    .eq("id", reviewId)
+    .eq("workshop_id", workshopId);
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      throw new Error("La base de resenas aun no esta disponible.");
     }
 
     throw error;

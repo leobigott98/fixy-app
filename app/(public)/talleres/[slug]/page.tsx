@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { WorkshopInquiryForm } from "@/components/marketplace/workshop-inquiry-form";
+import { WorkshopReviewForm } from "@/components/marketplace/workshop-review-form";
 import { PublicShell } from "@/components/public/public-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -317,12 +318,25 @@ export default async function PublicWorkshopPage({
                     className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <div className="font-medium">{review.reviewerName}</div>
+                      <div>
+                        <div className="font-medium">{review.title}</div>
+                        <div className="mt-1 text-xs text-[var(--muted)]">{review.reviewerName}</div>
+                      </div>
                       <div className="text-sm text-[var(--muted)]">{`${review.rating} / 5`}</div>
                     </div>
                     <div className="mt-2 text-sm leading-6 text-[var(--muted)]">
                       {review.comment || "Opinion breve sin comentario adicional."}
                     </div>
+                    {review.workshopResponse ? (
+                      <div className="mt-3 rounded-[20px] border border-[rgba(15,118,110,0.14)] bg-[rgba(15,118,110,0.08)] p-3">
+                        <div className="text-sm font-medium text-[var(--secondary)]">
+                          Respuesta del taller
+                        </div>
+                        <div className="mt-1 text-sm leading-6 text-[var(--foreground)]">
+                          {review.workshopResponse}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -340,11 +354,19 @@ export default async function PublicWorkshopPage({
                 <Badge>Horario publicado</Badge>
                 <Badge>Solicitud directa</Badge>
                 <Badge>WhatsApp visible</Badge>
+                {workshop.reviewSummary.totalApproved ? (
+                  <Badge variant="primary">{`${workshop.reviewSummary.totalApproved} resenas`}</Badge>
+                ) : null}
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <WorkshopReviewForm
+        workshopName={workshop.workshop_name}
+        workshopSlug={workshop.public_slug || workshop.workshop_name}
+      />
 
       <Card className="bg-white/92">
         <CardContent className="space-y-4 px-5 py-5">

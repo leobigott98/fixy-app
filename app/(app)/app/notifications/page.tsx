@@ -1,13 +1,31 @@
-import { Bell, MapPin, MessageCircleMore, PhoneCall, Wrench } from "lucide-react";
+import type { Route } from "next";
+import type { ReactNode } from "react";
+import { Bell, LayoutGrid, MapPin, MessageCircleMore, PhoneCall, TableProperties, Wrench } from "lucide-react";
 
 import { markMarketplaceInquiryAsContactedAction } from "@/app/actions/marketplace";
 import { PageHeader } from "@/components/shared/page-header";
+import { ViewToggle } from "@/components/shared/view-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getWorkshopNotifications } from "@/lib/data/marketplace";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getPreferredListView } from "@/lib/view-preferences";
 import { buildWhatsAppHref } from "@/lib/whatsapp";
+
+type NotificationsPageProps = {
+  searchParams: Promise<{
+    view?: string | string[];
+  }>;
+};
+
+function getQueryValue(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildViewHref(view: "cards" | "table") {
+  return `/app/notifications?view=${view}` as Route;
+}
 
 function formatCreatedAt(value: string) {
   return new Date(value).toLocaleString("es-VE", {
@@ -20,8 +38,10 @@ function getContactHref(phone: string) {
   return `tel:${phone.replace(/\s+/g, "")}`;
 }
 
-export default async function NotificationsPage() {
+export default async function NotificationsPage({ searchParams }: NotificationsPageProps) {
   const workshop = await requireCurrentWorkshop();
+  const params = await searchParams;
+  const view = await getPreferredListView(getQueryValue(params.view));
   const notifications = await getWorkshopNotifications(workshop.id);
 
   return (
@@ -43,83 +63,73 @@ export default async function NotificationsPage() {
           tone="success"
           value={String(notifications.filter((item) => item.status === "contacted").length)}
         />
-        <SummaryCard
-          label="Total recibidas"
-          value={String(notifications.length)}
+        <SummaryCard label="Total recibidas" value={String(notifications.length)} />
+      </div>
+
+      <div className="flex justify-end">
+        <ViewToggle
+          options={[
+            {
+              href: buildViewHref("cards"),
+              label: "Cards",
+              icon: <LayoutGrid className="size-4" />,
+              active: view === "cards",
+            },
+            {
+              href: buildViewHref("table"),
+              label: "Tabla",
+              icon: <TableProperties className="size-4" />,
+              active: view === "table",
+            },
+          ]}
         />
       </div>
 
       <div className="space-y-4">
         {notifications.length ? (
-          notifications.map((item) => {
-            const whatsappHref = buildWhatsAppHref(
-              item.requesterPhone,
-              `Hola ${item.requesterName}, te escribe ${workshop.workshop_name} desde Fixy sobre tu solicitud de ${item.requestedService}.`,
-            );
-            const markAction = markMarketplaceInquiryAsContactedAction.bind(null, item.id);
-
-            return (
-              <Card key={item.id} className="bg-white/88">
-                <CardContent className="space-y-4 px-5 py-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-[family-name:var(--font-heading)] text-2xl font-bold tracking-tight">
-                          {item.requesterName}
-                        </div>
-                        <Badge variant={item.status === "new" ? "primary" : "success"}>
-                          {item.status === "new" ? "Nueva" : item.status === "contacted" ? "Contactada" : "Cerrada"}
-                        </Badge>
-                        <Badge>{item.requestedService}</Badge>
-                      </div>
-                      <div className="text-sm text-[var(--muted)]">{formatCreatedAt(item.createdAt)}</div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <a href={getContactHref(item.requesterPhone)}>
-                          <PhoneCall className="size-4" />
-                          Llamar
-                        </a>
-                      </Button>
-                      <Button asChild size="sm" variant="secondary">
-                        <a href={whatsappHref ?? getContactHref(item.requesterPhone)} rel="noreferrer" target={whatsappHref ? "_blank" : undefined}>
-                          <MessageCircleMore className="size-4" />
-                          WhatsApp
-                        </a>
-                      </Button>
-                      {item.status === "new" ? (
-                        <form action={markAction}>
-                          <Button size="sm" type="submit" variant="primary">
-                            Marcar contactada
-                          </Button>
-                        </form>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <InfoBox icon={<PhoneCall className="size-4" />} label="Telefono" value={item.requesterPhone} />
-                    <InfoBox
-                      icon={<MapPin className="size-4" />}
-                      label="Ubicacion"
-                      value={item.requesterCity || "No especificada"}
-                    />
-                    <InfoBox
-                      icon={<Wrench className="size-4" />}
-                      label="Vehiculo"
-                      value={item.vehicleReference || "No especificado"}
-                    />
-                  </div>
-
-                  <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
-                    <div className="text-sm text-[var(--muted)]">Mensaje</div>
-                    <div className="mt-2 text-sm leading-6 text-[var(--foreground)]">{item.message}</div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
+          view === "table" ? (
+            <Card className="bg-white/88">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead className="bg-[rgba(21,28,35,0.04)] text-left text-[var(--muted)]">
+                      <tr>
+                        <th className="px-5 py-4 font-semibold">Cliente</th>
+                        <th className="px-5 py-4 font-semibold">Servicio</th>
+                        <th className="px-5 py-4 font-semibold">Ubicacion</th>
+                        <th className="px-5 py-4 font-semibold">Estado</th>
+                        <th className="px-5 py-4 font-semibold">Fecha</th>
+                        <th className="px-5 py-4 font-semibold">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {notifications.map((item) => (
+                        <NotificationTableRow
+                          key={item.id}
+                          requesterPhone={item.requesterPhone}
+                          requesterPhoneHref={getContactHref(item.requesterPhone)}
+                          status={item.status}
+                          whatsappHref={buildWhatsAppHref(
+                            item.requesterPhone,
+                            `Hola ${item.requesterName}, te escribe ${workshop.workshop_name} desde Fixy sobre tu solicitud de ${item.requestedService}.`,
+                          )}
+                          item={item}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            notifications.map((item) => (
+              <NotificationCard
+                key={item.id}
+                workshopName={workshop.workshop_name}
+                item={item}
+              />
+            ))
+          )
         ) : (
           <Card className="bg-white/88">
             <CardContent className="space-y-3 px-5 py-8 text-center">
@@ -138,6 +148,138 @@ export default async function NotificationsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function NotificationCard({
+  item,
+  workshopName,
+}: {
+  item: Awaited<ReturnType<typeof getWorkshopNotifications>>[number];
+  workshopName: string;
+}) {
+  const whatsappHref = buildWhatsAppHref(
+    item.requesterPhone,
+    `Hola ${item.requesterName}, te escribe ${workshopName} desde Fixy sobre tu solicitud de ${item.requestedService}.`,
+  );
+  const markAction = markMarketplaceInquiryAsContactedAction.bind(null, item.id);
+
+  return (
+    <Card className="bg-white/88">
+      <CardContent className="space-y-4 px-5 py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="font-[family-name:var(--font-heading)] text-2xl font-bold tracking-tight">
+                {item.requesterName}
+              </div>
+              <Badge variant={item.status === "new" ? "primary" : "success"}>
+                {item.status === "new" ? "Nueva" : item.status === "contacted" ? "Contactada" : "Cerrada"}
+              </Badge>
+              <Badge>{item.requestedService}</Badge>
+            </div>
+            <div className="text-sm text-[var(--muted)]">{formatCreatedAt(item.createdAt)}</div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <a href={getContactHref(item.requesterPhone)}>
+                <PhoneCall className="size-4" />
+                Llamar
+              </a>
+            </Button>
+            <Button asChild size="sm" variant="secondary">
+              <a href={whatsappHref ?? getContactHref(item.requesterPhone)} rel="noreferrer" target={whatsappHref ? "_blank" : undefined}>
+                <MessageCircleMore className="size-4" />
+                WhatsApp
+              </a>
+            </Button>
+            {item.status === "new" ? (
+              <form action={markAction}>
+                <Button size="sm" type="submit" variant="primary">
+                  Marcar contactada
+                </Button>
+              </form>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <InfoBox icon={<PhoneCall className="size-4" />} label="Telefono" value={item.requesterPhone} />
+          <InfoBox
+            icon={<MapPin className="size-4" />}
+            label="Ubicacion"
+            value={item.requesterCity || "No especificada"}
+          />
+          <InfoBox
+            icon={<Wrench className="size-4" />}
+            label="Vehiculo"
+            value={item.vehicleReference || "No especificado"}
+          />
+        </div>
+
+        <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
+          <div className="text-sm text-[var(--muted)]">Mensaje</div>
+          <div className="mt-2 text-sm leading-6 text-[var(--foreground)]">{item.message}</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function NotificationTableRow({
+  item,
+  requesterPhone,
+  requesterPhoneHref,
+  whatsappHref,
+  status,
+}: {
+  item: Awaited<ReturnType<typeof getWorkshopNotifications>>[number];
+  requesterPhone: string;
+  requesterPhoneHref: string;
+  whatsappHref: string | null;
+  status: "new" | "contacted" | "closed";
+}) {
+  const markAction = markMarketplaceInquiryAsContactedAction.bind(null, item.id);
+
+  return (
+    <tr className="border-t border-[var(--line)] align-top">
+      <td className="px-5 py-4">
+        <div className="font-semibold">{item.requesterName}</div>
+        <div className="mt-1 text-xs text-[var(--muted)]">{requesterPhone}</div>
+      </td>
+      <td className="px-5 py-4">{item.requestedService}</td>
+      <td className="px-5 py-4">{item.requesterCity || "No especificada"}</td>
+      <td className="px-5 py-4">
+        <Badge variant={status === "new" ? "primary" : "success"}>
+          {status === "new" ? "Nueva" : status === "contacted" ? "Contactada" : "Cerrada"}
+        </Badge>
+      </td>
+      <td className="px-5 py-4">{formatCreatedAt(item.createdAt)}</td>
+      <td className="px-5 py-4">
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" variant="outline">
+            <a href={requesterPhoneHref}>
+              <PhoneCall className="size-4" />
+              Llamar
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="secondary">
+            <a href={whatsappHref ?? requesterPhoneHref} rel="noreferrer" target={whatsappHref ? "_blank" : undefined}>
+              <MessageCircleMore className="size-4" />
+              WhatsApp
+            </a>
+          </Button>
+          {status === "new" ? (
+            <form action={markAction}>
+              <Button size="sm" type="submit" variant="primary">
+                Marcar
+              </Button>
+            </form>
+          ) : null}
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -168,7 +310,7 @@ function InfoBox({
   label,
   value,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
 }) {

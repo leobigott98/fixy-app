@@ -29,3 +29,30 @@ export const marketplaceInquirySchema = z.object({
 });
 
 export type MarketplaceInquiryInput = z.infer<typeof marketplaceInquirySchema>;
+
+export const marketplaceReviewSchema = z.object({
+  reviewerName: z.string().trim().min(2, "Ingresa tu nombre."),
+  title: z.string().trim().min(3, "Agrega un titulo corto.").max(80, "Usa un titulo mas corto."),
+  rating: z
+    .number({ error: "Selecciona una calificacion." })
+    .int("Selecciona una calificacion valida.")
+    .min(1, "Selecciona minimo 1 estrella.")
+    .max(5, "Selecciona maximo 5 estrellas."),
+  comment: z
+    .string()
+    .trim()
+    .min(10, "Comparte mas contexto sobre tu experiencia.")
+    .max(500, "Mantén tu comentario en 500 caracteres o menos."),
+});
+
+export type MarketplaceReviewInput = z.infer<typeof marketplaceReviewSchema>;
+
+export const workshopReviewResponseSchema = z.object({
+  response: z
+    .string()
+    .trim()
+    .min(6, "Agrega una respuesta breve pero util.")
+    .max(500, "Mantén la respuesta en 500 caracteres o menos."),
+});
+
+export type WorkshopReviewResponseInput = z.infer<typeof workshopReviewResponseSchema>;
