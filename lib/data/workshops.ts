@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { getAppSession } from "@/lib/auth/session";
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import type { WorkshopRole } from "@/lib/permissions";
 import { buildOpeningHoursLabel, type WorkshopProfileInput } from "@/lib/workshops/schema";
 
 export type WorkshopRecord = {
@@ -22,6 +23,23 @@ export type WorkshopRecord = {
   preferred_currency: "USD" | "VES" | "USD_VES";
   created_at: string;
   updated_at: string;
+};
+
+export type WorkshopMemberRecord = {
+  id: string;
+  workshop_id: string;
+  email: string;
+  full_name: string;
+  role: WorkshopRole;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CurrentWorkshopAccess = {
+  workshop: WorkshopRecord;
+  role: WorkshopRole;
+  member: WorkshopMemberRecord | null;
 };
 
 type DashboardStats = {
@@ -170,7 +188,7 @@ function formatDashboardStatus(status: string) {
   }
 }
 
-export async function getCurrentWorkshop() {
+export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess | null> {
   const session = await getAppSession();
 
   if (!session) {
@@ -192,7 +210,67 @@ export async function getCurrentWorkshop() {
     throw error;
   }
 
-  return (data as WorkshopRecord | null) ?? null;
+  const ownedWorkshop = (data as WorkshopRecord | null) ?? null;
+
+  if (ownedWorkshop) {
+    return {
+      workshop: ownedWorkshop,
+      role: "owner",
+      member: null,
+    };
+  }
+
+  const { data: memberData, error: memberError } = await supabase
+    .from("workshop_members")
+    .select("*, workshops(*)")
+    .eq("email", session.user.email)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (memberError) {
+    if (isMissingRelationError(memberError)) {
+      return null;
+    }
+
+    throw memberError;
+  }
+
+  const membership = (memberData as (WorkshopMemberRecord & { workshops: WorkshopRecord | WorkshopRecord[] | null }) | null) ?? null;
+
+  if (!membership) {
+    return null;
+  }
+
+  const workshop = Array.isArray(membership.workshops) ? membership.workshops[0] ?? null : membership.workshops;
+
+  if (!workshop) {
+    return null;
+  }
+
+  return {
+    workshop,
+    role: membership.role,
+    member: {
+      id: membership.id,
+      workshop_id: membership.workshop_id,
+      email: membership.email,
+      full_name: membership.full_name,
+      role: membership.role,
+      is_active: membership.is_active,
+      created_at: membership.created_at,
+      updated_at: membership.updated_at,
+    },
+  };
+}
+
+export async function getCurrentWorkshop() {
+  const access = await getCurrentWorkshopAccess();
+  return access?.workshop ?? null;
+}
+
+export async function getCurrentWorkshopRole() {
+  const access = await getCurrentWorkshopAccess();
+  return access?.role ?? null;
 }
 
 export async function requireCurrentWorkshop() {

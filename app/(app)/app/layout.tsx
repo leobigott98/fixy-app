@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 
 import { ProtectedAppShell } from "@/components/layout/protected-app-shell";
 import { requireAppSession } from "@/lib/auth/session";
-import { getCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess } from "@/lib/data/workshops";
+import { getRoleLabel } from "@/lib/permissions";
 
 type AppLayoutProps = {
   children: ReactNode;
@@ -10,13 +11,15 @@ type AppLayoutProps = {
 
 export default async function AppLayout({ children }: AppLayoutProps) {
   const session = await requireAppSession();
-  const workshop = await getCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
+  const workshop = access?.workshop ?? null;
+  const roleLabel = access ? getRoleLabel(access.role) : session.user.role;
 
   return (
     <ProtectedAppShell
-      role={session.user.role}
+      role={roleLabel}
       workshopLogoUrl={workshop?.logo_url ?? undefined}
-      userName={workshop?.owner_name ?? session.user.name}
+      userName={access?.member?.full_name ?? workshop?.owner_name ?? session.user.name}
       workshopName={workshop?.workshop_name}
     >
       {children}

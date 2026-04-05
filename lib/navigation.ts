@@ -1,11 +1,15 @@
+import type { Route } from "next";
 import {
   CalendarDays,
   CarFront,
   ClipboardList,
   Coins,
   ContactRound,
+  FileBarChart2,
   Gauge,
+  ShoppingCart,
   Settings,
+  Truck,
   UsersRound,
   Wrench,
 } from "lucide-react";
@@ -13,52 +17,67 @@ import {
 export const primaryNavigation = [
   {
     title: "Dashboard",
-    href: "/app/dashboard",
+    href: "/app/dashboard" as Route,
     icon: Gauge,
   },
   {
     title: "Clientes",
-    href: "/app/clients",
+    href: "/app/clients" as Route,
     icon: ContactRound,
   },
   {
     title: "Vehiculos",
-    href: "/app/vehicles",
+    href: "/app/vehicles" as Route,
     icon: CarFront,
   },
   {
     title: "Presupuestos",
-    href: "/app/quotes",
+    href: "/app/quotes" as Route,
     icon: ClipboardList,
   },
   {
     title: "Ordenes",
-    href: "/app/work-orders",
+    href: "/app/work-orders" as Route,
     icon: Wrench,
   },
   {
     title: "Equipo",
-    href: "/app/mechanics",
+    href: "/app/mechanics" as Route,
     icon: UsersRound,
   },
   {
     title: "Calendario",
-    href: "/app/calendar",
+    href: "/app/calendar" as Route,
     icon: CalendarDays,
   },
   {
     title: "Inventario",
-    href: "/app/inventory",
+    href: "/app/inventory" as Route,
     icon: ClipboardList,
   },
   {
     title: "Finanzas",
-    href: "/app/finances",
+    href: "/app/finances" as Route,
     icon: Coins,
   },
   {
+    title: "Proveedores",
+    href: "/app/suppliers" as Route,
+    icon: Truck,
+  },
+  {
+    title: "Compras",
+    href: "/app/purchase-orders" as Route,
+    icon: ShoppingCart,
+  },
+  {
+    title: "Reportes",
+    href: "/app/reports" as Route,
+    icon: FileBarChart2,
+  },
+  {
     title: "Ajustes",
-    href: "/app/settings",
+    href: "/app/settings" as Route,
     icon: Settings,
   },
 ] as const;
@@ -68,5 +87,5 @@ export const mobileNavigation = [
   primaryNavigation[1],
   primaryNavigation[3],
   primaryNavigation[4],
-  primaryNavigation[9],
+  primaryNavigation[12],
 ] as const;
