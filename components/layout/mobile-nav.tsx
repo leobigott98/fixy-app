@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { getMobileNavigation } from "@/lib/navigation";
-import type { WorkshopRole } from "@/lib/permissions";
+import type { AppRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 type MobileNavProps = {
-  role: WorkshopRole;
+  role: AppRole;
   notificationCount?: number;
 };
 

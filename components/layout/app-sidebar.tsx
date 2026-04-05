@@ -6,11 +6,11 @@ import { usePathname } from "next/navigation";
 import { FixyLogo } from "@/components/brand/fixy-logo";
 import { Badge } from "@/components/ui/badge";
 import { getPrimaryNavigation } from "@/lib/navigation";
-import type { WorkshopRole } from "@/lib/permissions";
+import type { AppRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 type AppSidebarProps = {
-  role: WorkshopRole;
+  role: AppRole;
   workshopName?: string;
   workshopLogoUrl?: string;
   notificationCount?: number;
@@ -24,6 +24,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
   const navigation = getPrimaryNavigation(role);
+  const isCarOwner = role === "car_owner";
   return (
     <aside className="fixy-shell hidden w-[280px] shrink-0 border-r border-[var(--line)] px-5 py-6 lg:flex lg:flex-col">
       <FixyLogo />
@@ -64,7 +65,7 @@ export function AppSidebar({
       </div>
 
       <div className="mt-auto rounded-[28px] bg-[var(--surface-dark)] p-5 text-white">
-        <Badge variant="dark">Taller activo</Badge>
+        <Badge variant="dark">{isCarOwner ? "Cuenta activa" : "Taller activo"}</Badge>
         <div className="mt-4 flex items-center gap-4">
           <div className="flex size-14 items-center justify-center overflow-hidden rounded-[20px] bg-white/10">
             {workshopLogoUrl ? (
@@ -81,10 +82,12 @@ export function AppSidebar({
           </div>
           <div className="space-y-2">
             <div className="font-[family-name:var(--font-heading)] text-xl font-bold tracking-tight">
-              {workshopName || "Configura tu taller"}
+              {workshopName || (isCarOwner ? "Mi garage" : "Configura tu taller")}
             </div>
             <p className="text-sm leading-6 text-white/70">
-              Shell operativa lista para dashboard, presupuestos, ordenes y seguimiento visual.
+              {isCarOwner
+                ? "Perfil, carros, citas e historial listos desde el telefono."
+                : "Shell operativa lista para dashboard, presupuestos, ordenes y seguimiento visual."}
             </p>
           </div>
         </div>

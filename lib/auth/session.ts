@@ -13,6 +13,7 @@ export type AppSession = {
     phone: string | null;
     name: string;
     role: string;
+    accountType: "workshop" | "car_owner" | null;
     factors: Array<{
       id: string;
       factor_type: string;
@@ -57,7 +58,16 @@ export async function getAppSession(): Promise<AppSession | null> {
         user.user_metadata?.full_name ??
         user.user_metadata?.name ??
         getDisplayNameFromIdentifier(loginIdentifier),
-      role: "Equipo",
+      role:
+        user.user_metadata?.account_type === "car_owner"
+          ? "Propietario de vehiculo"
+          : "Equipo",
+      accountType:
+        user.user_metadata?.account_type === "car_owner"
+          ? "car_owner"
+          : user.user_metadata?.account_type === "workshop"
+            ? "workshop"
+            : null,
       factors:
         user.factors?.map((factor) => ({
           id: factor.id,

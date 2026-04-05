@@ -12,6 +12,7 @@ import { prepareOtpAccessAction } from "@/app/actions/auth-access";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isEmailIdentifier, normalizeLoginIdentifier } from "@/lib/auth/session-utils";
 
@@ -22,6 +23,7 @@ type AuthFormProps = {
 };
 
 type OtpPhase = "request" | "verify";
+type SignupAccountType = "workshop" | "car_owner";
 
 const copyByVariant = {
   login: {
@@ -65,23 +67,57 @@ export function AuthForm({ variant }: AuthFormProps) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [phase, setPhase] = useState<OtpPhase>("request");
   const [pendingIdentifier, setPendingIdentifier] = useState<string>("");
-  const [signupDraft, setSignupDraft] = useState<{ name?: string; workshopName?: string }>({});
+  const [signupDraft, setSignupDraft] = useState<{
+    accountType?: SignupAccountType;
+    name?: string;
+    workshopName?: string;
+    phone?: string;
+  }>({});
 
-  const schema = z.object({
-    identifier:
-      variant === "signup"
-        ? z.string().email("Ingresa un correo valido.")
-        : z.string().trim().min(4, "Ingresa tu correo o telefono."),
-    workshopName:
-      variant === "signup"
-        ? z.string().trim().min(2, "Ingresa el nombre del taller.")
-        : z.string().optional(),
-    name:
-      variant === "signup"
-        ? z.string().trim().min(2, "Ingresa tu nombre.")
-        : z.string().optional(),
-    code: z.string().trim().optional(),
-  });
+  const schema = z
+    .object({
+      accountType:
+        variant === "signup"
+          ? z.enum(["workshop", "car_owner"])
+          : z.enum(["workshop", "car_owner"]).optional(),
+      identifier:
+        variant === "signup"
+          ? z.string().email("Ingresa un correo valido.")
+          : z.string().trim().min(4, "Ingresa tu correo o telefono."),
+      workshopName:
+        variant === "signup" ? z.string().trim() : z.string().optional(),
+      name:
+        variant === "signup"
+          ? z.string().trim().min(2, "Ingresa tu nombre.")
+          : z.string().optional(),
+      phone:
+        variant === "signup"
+          ? z
+              .string()
+              .trim()
+              .refine(
+                (value) => value.replace(/\D+/g, "").length >= 7,
+                "Ingresa un telefono valido.",
+              )
+          : z.string().optional(),
+      code: z.string().trim().optional(),
+    })
+    .superRefine((values, ctx) => {
+      if (variant !== "signup") {
+        return;
+      }
+
+      if (
+        values.accountType === "workshop" &&
+        (!values.workshopName || values.workshopName.trim().length < 2)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Ingresa el nombre del taller.",
+          path: ["workshopName"],
+        });
+      }
+    });
 
   type FormValues = z.infer<typeof schema>;
 
@@ -89,34 +125,45 @@ export function AuthForm({ variant }: AuthFormProps) {
     register,
     handleSubmit,
     getValues,
+    watch,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
+      accountType: "workshop",
       identifier: "",
       workshopName: "",
       name: "",
+      phone: "",
       code: "",
     },
   });
+  const signupAccountType = watch("accountType");
 
   async function requestCode(values: FormValues) {
     const identifier = normalizeLoginIdentifier(values.identifier);
     const isEmail = isEmailIdentifier(identifier);
+    const accountType = (values.accountType ?? "workshop") as SignupAccountType;
     const signupParams = new URLSearchParams();
 
     if (variant === "signup" && values.name?.trim()) {
-      signupParams.set("ownerName", values.name.trim());
+      signupParams.set(accountType === "car_owner" ? "fullName" : "ownerName", values.name.trim());
     }
 
-    if (variant === "signup" && values.workshopName?.trim()) {
+    if (variant === "signup" && accountType === "workshop" && values.workshopName?.trim()) {
       signupParams.set("workshopName", values.workshopName.trim());
+    }
+
+    if (variant === "signup" && values.phone?.trim()) {
+      signupParams.set("phone", values.phone.trim());
     }
 
     const nextDestination =
       variant === "signup"
-        ? `/app/onboarding${signupParams.toString() ? `?${signupParams.toString()}` : ""}`
+        ? `${accountType === "car_owner" ? "/app/owner/onboarding" : "/app/onboarding"}${
+            signupParams.toString() ? `?${signupParams.toString()}` : ""
+          }`
         : "/app";
     const emailRedirectTo =
       typeof window !== "undefined"
@@ -145,7 +192,10 @@ export function AuthForm({ variant }: AuthFormProps) {
                 variant === "signup"
                   ? {
                       full_name: values.name?.trim(),
-                      workshop_name: values.workshopName?.trim(),
+                      workshop_name:
+                        accountType === "workshop" ? values.workshopName?.trim() : undefined,
+                      phone: values.phone?.trim(),
+                      account_type: accountType,
                     }
                   : undefined,
             },
@@ -165,8 +215,10 @@ export function AuthForm({ variant }: AuthFormProps) {
 
     setPendingIdentifier(identifier);
     setSignupDraft({
+      accountType,
       name: values.name?.trim(),
       workshopName: values.workshopName?.trim(),
+      phone: values.phone?.trim(),
     });
     setPhase("verify");
     setFeedback(
@@ -211,14 +263,25 @@ export function AuthForm({ variant }: AuthFormProps) {
         const params = new URLSearchParams();
 
         if (signupDraft.name) {
-          params.set("ownerName", signupDraft.name);
+          params.set(
+            signupDraft.accountType === "car_owner" ? "fullName" : "ownerName",
+            signupDraft.name,
+          );
         }
 
         if (signupDraft.workshopName) {
           params.set("workshopName", signupDraft.workshopName);
         }
 
-        router.push(`/app/onboarding?${params.toString()}` as Route);
+        if (signupDraft.phone) {
+          params.set("phone", signupDraft.phone);
+        }
+
+        router.push(
+          `${
+            signupDraft.accountType === "car_owner" ? "/app/owner/onboarding" : "/app/onboarding"
+          }?${params.toString()}` as Route,
+        );
       } else {
         router.push("/app" as Route);
       }
@@ -259,14 +322,38 @@ export function AuthForm({ variant }: AuthFormProps) {
           {variant === "signup" ? (
             <>
               <Field
-                label="Nombre del encargado"
-                error={errors.name?.message}
-                input={<Input placeholder="Ej. Luis Mendoza" {...register("name")} />}
+                label="Tipo de cuenta"
+                error={errors.accountType?.message}
+                input={
+                  <Select {...register("accountType")}>
+                    <option value="workshop">Taller</option>
+                    <option value="car_owner">Propietario de carro</option>
+                  </Select>
+                }
               />
               <Field
-                label="Nombre del taller"
-                error={errors.workshopName?.message}
-                input={<Input placeholder="Ej. Fixy Garage" {...register("workshopName")} />}
+                label={signupAccountType === "car_owner" ? "Nombre completo" : "Nombre del encargado"}
+                error={errors.name?.message}
+                input={
+                  <Input
+                    placeholder={
+                      signupAccountType === "car_owner" ? "Ej. Andrea Perez" : "Ej. Luis Mendoza"
+                    }
+                    {...register("name")}
+                  />
+                }
+              />
+              {signupAccountType === "workshop" ? (
+                <Field
+                  label="Nombre del taller"
+                  error={errors.workshopName?.message}
+                  input={<Input placeholder="Ej. Fixy Garage" {...register("workshopName")} />}
+                />
+              ) : null}
+              <Field
+                label="Telefono"
+                error={errors.phone?.message}
+                input={<Input placeholder="Ej. 0414-1234567" {...register("phone")} />}
               />
             </>
           ) : null}
@@ -277,7 +364,9 @@ export function AuthForm({ variant }: AuthFormProps) {
             input={
               <Input
                 disabled={phase === "verify"}
-                placeholder={variant === "signup" ? "taller@fixy.app" : "taller@fixy.app o 04141234567"}
+                placeholder={
+                  variant === "signup" ? "nombre@correo.com" : "taller@fixy.app o 04141234567"
+                }
                 {...register("identifier")}
               />
             }

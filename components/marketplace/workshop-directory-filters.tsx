@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { Filter, Search } from "lucide-react";
 
@@ -11,6 +12,8 @@ type WorkshopDirectoryFiltersProps = {
   location?: string;
   service?: string;
   locations: string[];
+  actionPath?: Route;
+  clearHref?: Route;
 };
 
 export function WorkshopDirectoryFilters({
@@ -18,10 +21,12 @@ export function WorkshopDirectoryFilters({
   location,
   service,
   locations,
+  actionPath = "/talleres" as Route,
+  clearHref = "/talleres" as Route,
 }: WorkshopDirectoryFiltersProps) {
   return (
     <form
-      action="/talleres"
+      action={actionPath}
       className="grid gap-3 rounded-[30px] border border-[var(--line)] bg-white/82 p-4 shadow-[0_20px_50px_rgba(21,28,35,0.08)] sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.9fr_auto_auto]"
     >
       <label className="relative sm:col-span-2 lg:col-span-1">
@@ -58,7 +63,7 @@ export function WorkshopDirectoryFilters({
       </Button>
 
       <Button asChild type="button" variant="outline">
-        <Link href="/talleres">Limpiar</Link>
+        <Link href={clearHref}>Limpiar</Link>
       </Button>
     </form>
   );

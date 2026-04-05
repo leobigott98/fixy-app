@@ -10,12 +10,13 @@ export const workshopRoleOptions = [
 ] as const;
 
 export type WorkshopRole = (typeof workshopRoleOptions)[number]["value"];
+export type AppRole = WorkshopRole | "car_owner";
 
 export const staffInviteRoleOptions = workshopRoleOptions.filter(
   (option) => option.value !== "owner" && option.value !== "admin",
 );
 
-export const appModuleOptions = [
+const workshopAppModuleOptions = [
   "dashboard",
   "clients",
   "vehicles",
@@ -31,6 +32,20 @@ export const appModuleOptions = [
   "notifications",
   "reviews",
   "settings",
+ ] as const;
+
+const carOwnerAppModuleOptions = [
+  "owner_garage",
+  "owner_vehicles",
+  "owner_marketplace",
+  "owner_appointments",
+  "owner_history",
+  "owner_profile",
+] as const;
+
+export const appModuleOptions = [
+  ...workshopAppModuleOptions,
+  ...carOwnerAppModuleOptions,
 ] as const;
 
 export type AppModuleKey = (typeof appModuleOptions)[number];
@@ -44,9 +59,9 @@ export const permissionOptions = [
 
 export type AppPermission = (typeof permissionOptions)[number];
 
-const roleModules: Record<WorkshopRole, AppModuleKey[]> = {
-  owner: [...appModuleOptions],
-  admin: [...appModuleOptions],
+const roleModules: Record<AppRole, AppModuleKey[]> = {
+  owner: [...workshopAppModuleOptions],
+  admin: [...workshopAppModuleOptions],
   jefe_taller: ["dashboard", "vehicles", "work_orders", "mechanics", "calendar"],
   recepcion: [
     "dashboard",
@@ -74,6 +89,7 @@ const roleModules: Record<WorkshopRole, AppModuleKey[]> = {
     "reviews",
   ],
   mechanic: ["dashboard", "work_orders", "calendar"],
+  car_owner: [...carOwnerAppModuleOptions],
 };
 
 const rolePermissions: Record<WorkshopRole, AppPermission[]> = {
@@ -86,14 +102,18 @@ const rolePermissions: Record<WorkshopRole, AppPermission[]> = {
 };
 
 export function getRoleLabel(role: WorkshopRole | string) {
+  if (role === "car_owner") {
+    return "Propietario de vehiculo";
+  }
+
   return workshopRoleOptions.find((option) => option.value === role)?.label ?? role;
 }
 
-export function hasModuleAccess(role: WorkshopRole, moduleKey: AppModuleKey) {
+export function hasModuleAccess(role: AppRole, moduleKey: AppModuleKey) {
   return roleModules[role].includes(moduleKey);
 }
 
-export function getRoleModules(role: WorkshopRole) {
+export function getRoleModules(role: AppRole) {
   return roleModules[role];
 }
 
@@ -105,8 +125,10 @@ export function getRolePermissions(role: WorkshopRole) {
   return rolePermissions[role];
 }
 
-export function getRoleHomePath(role: WorkshopRole) {
+export function getRoleHomePath(role: AppRole) {
   switch (role) {
+    case "car_owner":
+      return "/app/garage" as Route;
     case "mechanic":
       return "/app/work-orders" as Route;
     case "jefe_taller":

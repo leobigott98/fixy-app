@@ -1,5 +1,6 @@
 import type { Route } from "next";
 import {
+  CalendarClock,
   CalendarDays,
   CarFront,
   ClipboardList,
@@ -14,9 +15,11 @@ import {
   Truck,
   UsersRound,
   Wrench,
+  Search,
+  UserRound,
 } from "lucide-react";
 
-import { hasModuleAccess, type AppModuleKey, type WorkshopRole } from "@/lib/permissions";
+import { hasModuleAccess, type AppModuleKey, type AppRole } from "@/lib/permissions";
 
 type NavigationItem = {
   title: string;
@@ -116,15 +119,59 @@ const allNavigation: NavigationItem[] = [
     icon: Settings,
     moduleKey: "settings",
   },
+  {
+    title: "Mi garage",
+    href: "/app/garage" as Route,
+    icon: Gauge,
+    moduleKey: "owner_garage",
+  },
+  {
+    title: "Mis carros",
+    href: "/app/my-cars" as Route,
+    icon: CarFront,
+    moduleKey: "owner_vehicles",
+  },
+  {
+    title: "Talleres",
+    href: "/app/workshops" as Route,
+    icon: Search,
+    moduleKey: "owner_marketplace",
+  },
+  {
+    title: "Citas",
+    href: "/app/appointments" as Route,
+    icon: CalendarClock,
+    moduleKey: "owner_appointments",
+  },
+  {
+    title: "Historial",
+    href: "/app/history" as Route,
+    icon: ClipboardList,
+    moduleKey: "owner_history",
+  },
+  {
+    title: "Perfil",
+    href: "/app/profile" as Route,
+    icon: UserRound,
+    moduleKey: "owner_profile",
+  },
 ] as const;
 
-export function getPrimaryNavigation(role: WorkshopRole) {
+export function getPrimaryNavigation(role: AppRole) {
   return allNavigation.filter((item) => hasModuleAccess(role, item.moduleKey));
 }
 
-export function getMobileNavigation(role: WorkshopRole) {
+export function getMobileNavigation(role: AppRole) {
   const preferredModules: AppModuleKey[] =
-    role === "mechanic"
+    role === "car_owner"
+      ? [
+          "owner_garage",
+          "owner_vehicles",
+          "owner_marketplace",
+          "owner_appointments",
+          "owner_profile",
+        ]
+      : role === "mechanic"
       ? ["dashboard", "work_orders", "calendar"]
       : role === "jefe_taller"
         ? ["dashboard", "mechanics", "work_orders", "calendar"]

@@ -6,12 +6,12 @@ import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppTopbar } from "@/components/layout/app-topbar";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import type { WorkshopRole } from "@/lib/permissions";
+import type { AppRole } from "@/lib/permissions";
 
 type ProtectedAppShellProps = {
   children: ReactNode;
   userName: string;
-  role: WorkshopRole;
+  role: AppRole;
   roleLabel: string;
   workshopName?: string;
   workshopLogoUrl?: string;
@@ -28,7 +28,8 @@ export function ProtectedAppShell({
   notificationCount = 0,
 }: ProtectedAppShellProps) {
   const pathname = usePathname();
-  const isOnboardingRoute = pathname === "/app/onboarding";
+  const isOnboardingRoute =
+    pathname === "/app/onboarding" || pathname === "/app/owner/onboarding";
 
   if (isOnboardingRoute) {
     return (

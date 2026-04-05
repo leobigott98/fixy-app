@@ -4,11 +4,11 @@ import { Bell, Search } from "lucide-react";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { hasModuleAccess, type WorkshopRole } from "@/lib/permissions";
+import { hasModuleAccess, type AppRole } from "@/lib/permissions";
 
 type AppTopbarProps = {
   userName: string;
-  role: WorkshopRole;
+  role: AppRole;
   roleLabel: string;
   workshopName: string;
   workshopLogoUrl?: string;
@@ -24,12 +24,13 @@ export function AppTopbar({
   notificationCount = 0,
 }: AppTopbarProps) {
   const canOpenNotifications = hasModuleAccess(role, "notifications");
+  const isCarOwner = role === "car_owner";
 
   return (
     <div className="flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/72 p-4 shadow-[0_18px_40px_rgba(21,28,35,0.07)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="success">Taller en marcha</Badge>
+          <Badge variant="success">{isCarOwner ? "Movilidad al dia" : "Taller en marcha"}</Badge>
           <Badge>{roleLabel}</Badge>
         </div>
         <div className="flex items-center gap-3">
@@ -51,7 +52,9 @@ export function AppTopbar({
               {workshopName}
             </div>
             <div className="text-sm text-[var(--muted)]">
-              Hola, {userName}. Base lista para operar desde movil y escritorio.
+              {isCarOwner
+                ? `Hola, ${userName}. Todo tu carro y tus citas en una sola vista.`
+                : `Hola, ${userName}. Base lista para operar desde movil y escritorio.`}
             </div>
           </div>
         </div>

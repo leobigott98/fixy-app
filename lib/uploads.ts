@@ -37,6 +37,24 @@ export const uploadScopes = {
     maxSizeInBytes: 8 * 1024 * 1024,
     mimeTypes: ["image/jpeg", "image/webp", "image/png"],
   },
+  owner_profile_photo: {
+    folder: "owners/avatars",
+    maxFiles: 1,
+    maxSizeInBytes: 8 * 1024 * 1024,
+    mimeTypes: ["image/jpeg", "image/webp", "image/png"],
+  },
+  owner_vehicle_photo: {
+    folder: "owners/vehicles",
+    maxFiles: 12,
+    maxSizeInBytes: 8 * 1024 * 1024,
+    mimeTypes: ["image/jpeg", "image/webp", "image/png"],
+  },
+  owner_service_photo: {
+    folder: "owners/services",
+    maxFiles: 12,
+    maxSizeInBytes: 8 * 1024 * 1024,
+    mimeTypes: ["image/jpeg", "image/webp", "image/png"],
+  },
   work_order_reference: {
     folder: "work-orders/references",
     maxFiles: 12,
