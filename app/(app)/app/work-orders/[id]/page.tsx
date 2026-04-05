@@ -13,6 +13,7 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { ClientShareTools } from "@/components/shared/client-share-tools";
 import { PageHeader } from "@/components/shared/page-header";
 import { WhatsAppLinkButton } from "@/components/shared/whatsapp-link-button";
 import { WorkOrderStatusBadge } from "@/components/work-orders/work-order-status-badge";
@@ -145,6 +146,18 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
         </Button>
         <WhatsAppLinkButton href={paymentReminderHref} label="Recordar pago" variant="primary" />
       </div>
+
+      <Card className="bg-white/86">
+        <CardHeader>
+          <CardTitle>Compartir seguimiento con cliente</CardTitle>
+          <CardDescription>
+            Prepara una vista publica clara del estado de la orden y un documento profesional listo para PDF.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ClientShareTools kind="workOrder" resourceId={workOrder.id} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Codigo" value={workOrder.code || "Sin codigo"} />

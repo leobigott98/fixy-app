@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
 import { getInventoryPartOptions } from "@/lib/data/inventory";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { buildPublicQuoteDocumentPath, buildPublicQuotePath } from "@/lib/share-links";
 import {
   normalizeQuoteInput,
   type QuoteFormValues,
@@ -24,6 +25,9 @@ export type QuoteRecord = {
   notes: string | null;
   sent_at: string | null;
   approved_at: string | null;
+  public_share_token: string | null;
+  public_share_enabled: boolean;
+  public_shared_at: string | null;
   archived_at: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -504,6 +508,62 @@ export async function updateQuoteLifecycle(
   }
 
   return normalizeQuoteRecord(data as QuoteRecord);
+}
+
+export async function ensureQuotePublicShare(quoteId: string) {
+  const workshop = await requireCurrentWorkshop();
+  const supabase = await createSupabaseDataClient();
+
+  const { data: existingData, error: existingError } = await supabase
+    .from("quotes")
+    .select("id,status,sent_at,public_share_token")
+    .eq("workshop_id", workshop.id)
+    .eq("id", quoteId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  const existing = existingData as Pick<
+    QuoteRecord,
+    "id" | "status" | "sent_at" | "public_share_token"
+  > | null;
+
+  if (!existing) {
+    throw new Error("Presupuesto no encontrado.");
+  }
+
+  const payload = {
+    public_share_enabled: true,
+    public_shared_at: new Date().toISOString(),
+    sent_at: existing.sent_at ?? new Date().toISOString(),
+    status: existing.status === "draft" ? ("sent" as const) : existing.status,
+  };
+
+  const { data, error } = await supabase
+    .from("quotes")
+    .update(payload)
+    .eq("workshop_id", workshop.id)
+    .eq("id", quoteId)
+    .select("public_share_token")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const token = (data as { public_share_token: string | null }).public_share_token;
+
+  if (!token) {
+    throw new Error("No se pudo generar el link publico del presupuesto.");
+  }
+
+  return {
+    token,
+    path: buildPublicQuotePath(token),
+    documentPath: buildPublicQuoteDocumentPath(token),
+  };
 }
 
 export function getQuoteDetailHref(quoteId: string) {

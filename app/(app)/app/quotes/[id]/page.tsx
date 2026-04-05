@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CalendarDays, ClipboardList, FileText, MessageCircleMore, Send, SquarePen, Wrench } from "lucide-react";
 
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge";
+import { ClientShareTools } from "@/components/shared/client-share-tools";
 import { CreateFromQuoteButton } from "@/components/work-orders/create-from-quote-button";
 import { PageHeader } from "@/components/shared/page-header";
 import { WhatsAppLinkButton } from "@/components/shared/whatsapp-link-button";
@@ -69,6 +70,18 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
           </Button>
         ) : null}
       </div>
+
+      <Card className="bg-white/86">
+        <CardHeader>
+          <CardTitle>Compartir con cliente</CardTitle>
+          <CardDescription>
+            Activa una vista publica profesional para aprobacion y comparte tambien el documento listo para PDF.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ClientShareTools kind="quote" resourceId={quote.id} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Creado" value={new Date(quote.created_at).toLocaleDateString("es-VE")} />

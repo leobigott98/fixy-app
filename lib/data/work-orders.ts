@@ -6,6 +6,7 @@ import { getInventoryPartOptions, syncWorkOrderInventoryUsage } from "@/lib/data
 import { getMechanicAssignmentOptions, type MechanicRecord } from "@/lib/data/mechanics";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
+import { buildPublicWorkOrderDocumentPath, buildPublicWorkOrderPath } from "@/lib/share-links";
 import type { QuoteItemRecord, QuoteRecord } from "@/lib/data/quotes";
 import { normalizeWorkOrderInput, type WorkOrderFormValues, type WorkOrderInput } from "@/lib/work-orders/schema";
 
@@ -31,6 +32,9 @@ export type WorkOrderRecord = {
   bay_slot: number | null;
   assigned_mechanic_id: string | null;
   assigned_mechanic_name: string | null;
+  public_share_token: string | null;
+  public_share_enabled: boolean;
+  public_shared_at: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -1021,6 +1025,55 @@ export async function createWorkOrderFromApprovedQuote(quoteId: string) {
   await insertStatusHistory(workOrder.id, workshop.id, null, "diagnostico_pendiente", "Orden creada desde presupuesto aprobado");
 
   return workOrder;
+}
+
+export async function ensureWorkOrderPublicShare(workOrderId: string) {
+  const workshop = await requireCurrentWorkshop();
+  const supabase = await createSupabaseDataClient();
+
+  const { data: existingData, error: existingError } = await supabase
+    .from("work_orders")
+    .select("id,public_share_token")
+    .eq("workshop_id", workshop.id)
+    .eq("id", workOrderId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  const existing = existingData as Pick<WorkOrderRecord, "id" | "public_share_token"> | null;
+
+  if (!existing) {
+    throw new Error("Orden no encontrada.");
+  }
+
+  const { data, error } = await supabase
+    .from("work_orders")
+    .update({
+      public_share_enabled: true,
+      public_shared_at: new Date().toISOString(),
+    })
+    .eq("workshop_id", workshop.id)
+    .eq("id", workOrderId)
+    .select("public_share_token")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const token = (data as { public_share_token: string | null }).public_share_token;
+
+  if (!token) {
+    throw new Error("No se pudo generar el link publico de la orden.");
+  }
+
+  return {
+    token,
+    path: buildPublicWorkOrderPath(token),
+    documentPath: buildPublicWorkOrderDocumentPath(token),
+  };
 }
 
 export function buildWorkOrderFormDefaults(
