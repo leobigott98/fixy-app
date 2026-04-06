@@ -1,8 +1,10 @@
 import { PageHeader } from "@/components/shared/page-header";
+import { OnboardingExitActions } from "@/components/auth/onboarding-exit-actions";
 import { OwnerProfileForm } from "@/components/car-owners/owner-profile-form";
 import { buildOwnerProfileDefaults } from "@/lib/car-owners/schema";
 import { getAppSession } from "@/lib/auth/session";
 import { getCurrentCarOwnerProfile } from "@/lib/data/car-owners";
+import { redirect } from "next/navigation";
 
 type OwnerOnboardingPageProps = {
   searchParams: Promise<{
@@ -21,6 +23,10 @@ export default async function OwnerOnboardingPage({ searchParams }: OwnerOnboard
     getCurrentCarOwnerProfile(),
     searchParams,
   ]);
+
+  if (!session) {
+    redirect("/login");
+  }
 
   const initialValues = buildOwnerProfileDefaults({
     fullName:
@@ -45,6 +51,7 @@ export default async function OwnerOnboardingPage({ searchParams }: OwnerOnboard
         description="Cierra tu onboarding con tu contacto principal y entra a un garage personal para carros, citas, talleres e historial."
         status="Propietario"
       />
+      <OnboardingExitActions />
       <OwnerProfileForm initialValues={initialValues} mode="onboarding" />
     </div>
   );
