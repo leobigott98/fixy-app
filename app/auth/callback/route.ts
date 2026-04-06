@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
   const type = requestUrl.searchParams.get("type");
   const next = requestUrl.searchParams.get("next") || "/app";
   const redirectUrl = new URL(next, request.url);
-  const loginUrl = new URL("/login", request.url);
+  const isRecoveryFlow = type === "recovery" || next.includes("/reset-password");
+  const fallbackUrl = new URL(isRecoveryFlow ? "/forgot-password" : "/login", request.url);
   let response = NextResponse.redirect(redirectUrl);
 
   const supabase = createServerClient(
@@ -45,8 +46,14 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      if (isRecoveryFlow && redirectUrl.pathname === "/reset-password") {
+        redirectUrl.searchParams.set("auth", "reset-ready");
+        response = NextResponse.redirect(redirectUrl);
+      }
       return response;
     }
+
+    fallbackUrl.searchParams.set("auth", isRecoveryFlow ? "recovery-link-expired" : "expired-link");
   }
 
   if (tokenHash && isSupportedOtpType(type)) {
@@ -56,9 +63,19 @@ export async function GET(request: NextRequest) {
     });
 
     if (!error) {
+      if (isRecoveryFlow && redirectUrl.pathname === "/reset-password") {
+        redirectUrl.searchParams.set("auth", "reset-ready");
+        response = NextResponse.redirect(redirectUrl);
+      }
       return response;
     }
+
+    fallbackUrl.searchParams.set("auth", isRecoveryFlow ? "recovery-link-expired" : "expired-link");
   }
 
-  return NextResponse.redirect(loginUrl);
+  if (!code && !(tokenHash && isSupportedOtpType(type))) {
+    fallbackUrl.searchParams.set("auth", "missing-link");
+  }
+
+  return NextResponse.redirect(fallbackUrl);
 }

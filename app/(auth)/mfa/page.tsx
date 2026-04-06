@@ -11,7 +11,7 @@ export default async function MfaPage() {
   const access = await getCurrentWorkshopAccess();
 
   if (access && !["owner", "admin"].includes(access.role)) {
-    redirect("/app/dashboard");
+    redirect("/app");
   }
 
   const roleLabel = access ? getRoleLabel(access.role) : session.user.role;
@@ -19,9 +19,9 @@ export default async function MfaPage() {
   return (
     <AuthShell
       title="Verificacion administrativa"
-      description="Antes de abrir el panel administrativo, valida tu segundo factor desde una app autenticadora."
+      description="Antes de abrir el panel administrativo, valida tu segundo factor desde una app autenticadora o por SMS."
     >
-      <MfaForm roleLabel={roleLabel} />
+      <MfaForm preferredPhone={session.user.contactPhone} roleLabel={roleLabel} />
     </AuthShell>
   );
 }

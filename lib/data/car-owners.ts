@@ -259,8 +259,8 @@ export async function upsertCurrentCarOwnerProfile(values: OwnerProfileFormValue
       {
         auth_user_id: session.user.id,
         full_name: values.fullName,
-        email: session.user.email,
-        phone: values.phone,
+        email: session.user.contactEmail,
+        phone: values.phone || session.user.contactPhone || "",
         city: values.city || null,
         avatar_url: values.avatarUrl || null,
         preferred_contact: values.preferredContact,

@@ -5,7 +5,7 @@ export default function SignupPage() {
   return (
     <AuthShell
       title="Crear cuenta"
-      description="Crea tu cuenta en Fixy como taller o como propietario de vehiculo y entra con una experiencia moderna, clara y lista para moverse desde el telefono."
+      description="Crea tu cuenta como taller o propietario de vehiculo y elige desde el inicio la forma de acceso que te genere menos friccion."
     >
       <AuthForm variant="signup" />
     </AuthShell>

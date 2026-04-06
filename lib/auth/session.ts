@@ -11,6 +11,8 @@ export type AppSession = {
     loginIdentifier: string;
     email: string | null;
     phone: string | null;
+    contactEmail: string | null;
+    contactPhone: string | null;
     name: string;
     role: string;
     accountType: "workshop" | "car_owner" | null;
@@ -46,6 +48,16 @@ export async function getAppSession(): Promise<AppSession | null> {
 
   const email = user.email ?? null;
   const phone = user.phone ?? null;
+  const contactEmail =
+    email ??
+    (typeof user.user_metadata?.contact_email === "string"
+      ? user.user_metadata.contact_email
+      : null);
+  const contactPhone =
+    phone ??
+    (typeof user.user_metadata?.contact_phone === "string"
+      ? user.user_metadata.contact_phone
+      : null);
   const loginIdentifier = email ?? phone ?? "";
 
   return {
@@ -54,6 +66,8 @@ export async function getAppSession(): Promise<AppSession | null> {
       loginIdentifier,
       email,
       phone,
+      contactEmail,
+      contactPhone,
       name:
         user.user_metadata?.full_name ??
         user.user_metadata?.name ??

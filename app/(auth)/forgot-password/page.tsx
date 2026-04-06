@@ -1,13 +1,13 @@
-import { AuthForm } from "@/components/auth/auth-form";
+import { PasswordRecoveryForm } from "@/components/auth/password-recovery-form";
 import { AuthShell } from "@/components/auth/auth-shell";
 
 export default function ForgotPasswordPage() {
   return (
     <AuthShell
-      title="Recibir codigo de acceso"
-      description="Si no te llego el codigo o necesitas entrar otra vez, vuelve a solicitarlo por correo o telefono."
+      title="Recuperar contrasena"
+      description="Te enviamos un enlace para definir una nueva contrasena. Si tu acceso principal es por telefono, puedes entrar desde login usando SMS."
     >
-      <AuthForm variant="forgot-password" />
+      <PasswordRecoveryForm />
     </AuthShell>
   );
 }

@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 
 import { listViewCookieName } from "@/lib/view-preference-constants";
 
-const AUTH_ROUTES = ["/login", "/signup", "/forgot-password", "/mfa"];
+const AUTH_ROUTES = ["/login", "/signup", "/forgot-password", "/reset-password", "/mfa"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -41,8 +41,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (isAuthRoute && user && pathname !== "/mfa") {
-    return NextResponse.redirect(new URL("/app/dashboard", request.url));
+  if (isAuthRoute && user && pathname !== "/mfa" && pathname !== "/reset-password") {
+    return NextResponse.redirect(new URL("/app", request.url));
   }
 
   const requestedView = request.nextUrl.searchParams.get("view");
@@ -59,5 +59,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login", "/signup", "/forgot-password", "/mfa"],
+  matcher: ["/app/:path*", "/login", "/signup", "/forgot-password", "/reset-password", "/mfa"],
 };
