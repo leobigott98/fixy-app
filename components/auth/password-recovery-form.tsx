@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,8 +32,7 @@ function getRecoveryRedirect() {
   return `${window.location.origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
 }
 
-export function PasswordRecoveryForm() {
-  const searchParams = useSearchParams();
+export function PasswordRecoveryForm({ initialNoticeKey }: { initialNoticeKey?: string | null }) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [notice, setNotice] = useState<AuthNoticeValue | null>(null);
   const {
@@ -69,7 +67,7 @@ export function PasswordRecoveryForm() {
     });
   });
 
-  const queryNotice = getAuthNoticeFromQueryKey(searchParams.get("auth"));
+  const queryNotice = getAuthNoticeFromQueryKey(initialNoticeKey ?? null);
   const visibleNotice = notice ?? queryNotice;
 
   return (

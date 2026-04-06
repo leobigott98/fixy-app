@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,6 +35,7 @@ type OtpPhase = "request" | "verify";
 
 type AuthFormProps = {
   variant: AuthVariant;
+  initialNoticeKey?: string | null;
 };
 
 type SignupDraft = {
@@ -206,9 +207,8 @@ function buildSignupMetadata(signupDraft: SignupDraft) {
   };
 }
 
-export function AuthForm({ variant }: AuthFormProps) {
+export function AuthForm({ variant, initialNoticeKey }: AuthFormProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [notice, setNotice] = useState<AuthNoticeValue | null>(null);
   const [ignoreQueryNotice, setIgnoreQueryNotice] = useState(false);
@@ -258,8 +258,8 @@ export function AuthForm({ variant }: AuthFormProps) {
   const passwordIdentity = isSignup ? watch("passwordIdentity") : undefined;
   const availableMethods = getAvailableMethods(variant, accountType);
   const queryNotice = useMemo(
-    () => getAuthNoticeFromQueryKey(searchParams.get("auth")),
-    [searchParams],
+    () => getAuthNoticeFromQueryKey(initialNoticeKey ?? null),
+    [initialNoticeKey],
   );
   const visibleNotice = notice ?? (!ignoreQueryNotice ? queryNotice : null);
 
