@@ -11,23 +11,23 @@ type AuthShellProps = {
 export function AuthShell({ title, description, children }: AuthShellProps) {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
-      <section className="hidden mesh-panel subtle-grid p-10 text-white lg:flex lg:flex-col lg:justify-between">
-        <FixyLogo className="text-white" />
+      <section className="hidden mesh-panel subtle-grid p-10 text-black lg:flex lg:flex-col lg:justify-between">
+        <FixyLogo className="text-black" />
         <div className="max-w-xl space-y-6">
-          <div className="inline-flex rounded-full border border-white/14 bg-white/8 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-white/70">
+          <div className="inline-flex rounded-full border border-white/14 bg-white/8 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-black/70">
             Fixy para talleres y propietarios
           </div>
           <div className="space-y-4">
             <h1 className="font-[family-name:var(--font-heading)] text-5xl font-bold leading-tight tracking-tight">
               Control operativo para talleres. Claridad total para quienes cuidan su carro.
             </h1>
-            <p className="max-w-lg text-base leading-7 text-white/72">
+            <p className="max-w-lg text-base leading-7 text-black/72">
               Entra desde el telefono, agenda mas rapido, da seguimiento a reparaciones y evita el
               caos de mensajes sueltos, cuadernos y enlaces confusos.
             </p>
           </div>
         </div>
-        <div className="rounded-[28px] border border-white/12 bg-white/8 p-6 text-sm leading-6 text-white/76">
+        <div className="rounded-[28px] border border-white/12 bg-white/8 p-6 text-sm leading-6 text-black/76">
           Acceso movil primero, rutas claras y menos friccion para entrar, registrarse o recuperar
           la cuenta.
         </div>

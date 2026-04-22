@@ -63,12 +63,12 @@ export default function LandingPage() {
           </div>
         </header>
 
-        <div className="grid gap-8 pt-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-16">
-          <div className="space-y-6">
+        <div className="grid gap-8 pt-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-10">
+          <div className="space-y-6 lg:pt-0 lg:items-start">
             <Badge variant="primary">Workshop OS para talleres en Venezuela</Badge>
             <div className="space-y-4">
               <h1 className="max-w-3xl font-[family-name:var(--font-heading)] text-5xl font-bold tracking-tight sm:text-6xl">
-                El sistema del taller no debe sentirse como un ERP viejo.
+                Gestionar tu taller y vehiculos nunca habia sido tan facil. 
               </h1>
               <p className="max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">
                 Fixy ayuda a cotizar, organizar, cobrar y entregar mejor con una experiencia
@@ -79,7 +79,7 @@ export default function LandingPage() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild variant="primary" size="lg">
                 <Link href="/signup">
-                  Empezar Sprint 0
+                  Empezar
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
@@ -103,10 +103,10 @@ export default function LandingPage() {
 
           <div className="relative">
             <div className="glass-card overflow-hidden rounded-[32px] border p-4 sm:p-5">
-              <div className="mesh-panel subtle-grid rounded-[28px] p-5 text-white">
+              <div className="mesh-panel subtle-grid rounded-[28px] p-5 text-black/90">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs uppercase tracking-[0.24em] text-white/60">
+                    <div className="text-xs uppercase tracking-[0.24em] text-black/90">
                       Hoy en el taller
                     </div>
                     <div className="mt-2 font-[family-name:var(--font-heading)] text-3xl font-bold">
@@ -126,11 +126,11 @@ export default function LandingPage() {
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <div className="font-semibold">{vehicle}</div>
-                          <div className="mt-1 text-sm text-white/70">{status}</div>
+                          <div className="mt-1 text-sm text-black/70">{status}</div>
                         </div>
-                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-white/88" />
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-black/88" />
                       </div>
-                      <div className="mt-4 flex items-center gap-2 text-xs text-white/76">
+                      <div className="mt-4 flex items-center gap-2 text-xs text-black/76">
                         <MessageCircleMore className="size-3.5" />
                         {action}
                       </div>

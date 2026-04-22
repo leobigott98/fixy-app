@@ -701,7 +701,7 @@ export function AuthForm({ variant, initialNoticeKey }: AuthFormProps) {
                           ? "Magic link o codigo"
                           : "Codigo SMS"}
                     </div>
-                    {(variant === "login" && method === "password") ||
+                    {/* {(variant === "login" && method === "password") ||
                     (variant === "signup" && accountType === "car_owner" && method === "email_otp") ||
                     (variant === "signup" && accountType === "workshop" && method === "password") ? (
                       <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--secondary)]">
@@ -711,7 +711,7 @@ export function AuthForm({ variant, initialNoticeKey }: AuthFormProps) {
                             ? "Simple"
                             : "Recomendado"}
                       </span>
-                    ) : null}
+                    ) : null} */}
                   </div>
                   <div className="mt-1 text-xs leading-5 text-[var(--muted)]">
                     {method === "password"
