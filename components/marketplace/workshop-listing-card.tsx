@@ -35,10 +35,10 @@ export function WorkshopListingCard({ workshop }: { workshop: MarketplaceWorksho
     : [workshop.workshop_type];
 
   return (
-    <Card className="overflow-hidden border border-[var(--line)] bg-white/90">
+    <Card className="overflow-hidden border border-[var(--line)] bg-white/92">
       <CardContent className="space-y-5 px-5 py-5">
         <div className="flex items-start gap-4">
-          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--line)] bg-[rgba(21,28,35,0.04)]">
+          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border border-[var(--line)] bg-[rgba(201,138,5,0.08)]">
             {workshop.logo_url ? (
               <img
                 alt={`Logo de ${workshop.workshop_name}`}
@@ -79,7 +79,7 @@ export function WorkshopListingCard({ workshop }: { workshop: MarketplaceWorksho
           ))}
         </div>
 
-        <div className="grid gap-3 rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 sm:grid-cols-3">
+        <div className="grid gap-3 rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4 sm:grid-cols-3">
           <TrustBox
             icon={<ShieldCheck className="size-4" />}
             label="Confianza"
@@ -145,7 +145,7 @@ function TrustBox({
   value: string;
 }) {
   return (
-    <div className="rounded-[20px] bg-white px-3 py-3">
+    <div className="rounded-[16px] bg-white px-3 py-3">
       <div className="flex items-center gap-2 text-sm font-medium text-[var(--foreground)]">
         <span className="text-[var(--primary-strong)]">{icon}</span>
         {label}

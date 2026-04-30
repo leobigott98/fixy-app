@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { inviteWorkshopMember } from "@/lib/data/workshops";
 import {
@@ -18,6 +19,52 @@ type InviteWorkshopTeamResult =
       message: string;
       fieldErrors?: Record<string, string[] | undefined>;
     };
+
+async function getRequestOrigin() {
+  const requestHeaders = await headers();
+  const origin = requestHeaders.get("origin");
+
+  if (origin?.startsWith("http://") || origin?.startsWith("https://")) {
+    return origin;
+  }
+
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+
+  if (!host) {
+    return null;
+  }
+
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
+
+  return `${protocol}://${host}`;
+}
+
+function getInviteMessage(result: Awaited<ReturnType<typeof inviteWorkshopMember>>) {
+  if (result.kind === "updated") {
+    return "Acceso del integrante actualizado.";
+  }
+
+  const prefix =
+    result.kind === "resent"
+      ? "Invitacion actualizada."
+      : "Invitacion guardada.";
+
+  if (result.delivery === "email_invite_sent") {
+    return `${prefix} Enviamos un correo para que la persona active su acceso y defina su contrasena.`;
+  }
+
+  if (result.delivery === "password_setup_sent") {
+    return `${prefix} Esa cuenta ya existia, asi que enviamos un correo para definir una nueva contrasena.`;
+  }
+
+  if (result.delivery === "sms_ready") {
+    return `${prefix} La persona podra entrar con codigo SMS si el proveedor de SMS esta configurado.`;
+  }
+
+  return result.deliveryError
+    ? `${prefix} No se pudo enviar el correo de acceso: ${result.deliveryError}`
+    : `${prefix} La persona podra entrar con su correo o telefono.`;
+}
 
 export async function inviteWorkshopMemberAction(
   values: WorkshopTeamInviteValues,
@@ -40,6 +87,7 @@ export async function inviteWorkshopMemberAction(
       phone: parsed.data.phone,
       mechanicId: parsed.data.mechanicId || null,
       message: parsed.data.message,
+      origin: await getRequestOrigin(),
     });
 
     revalidatePath("/app/settings");
@@ -47,10 +95,7 @@ export async function inviteWorkshopMemberAction(
 
     return {
       success: true,
-      message:
-        result.kind === "updated"
-          ? "Acceso del integrante actualizado."
-          : "Invitacion guardada. La persona podra entrar con su correo o telefono.",
+      message: getInviteMessage(result),
     };
   } catch (error) {
     return {

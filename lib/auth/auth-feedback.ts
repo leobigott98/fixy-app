@@ -65,6 +65,13 @@ export function normalizeAuthMessage(rawMessage: string): AuthNotice {
     };
   }
 
+  if (lower.includes("auth session missing")) {
+    return {
+      tone: "error",
+      message: "El enlace no abrio una sesion valida. Solicita uno nuevo e intenta otra vez.",
+    };
+  }
+
   if (lower.includes("email not confirmed")) {
     return {
       tone: "error",

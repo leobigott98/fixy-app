@@ -2,6 +2,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { CreditCard, Globe, ShieldCheck, ShoppingCart, Truck, UsersRound } from "lucide-react";
 
+import { PasswordUpdateForm } from "@/components/auth/password-update-form";
 import { PermissionBanner } from "@/components/shared/permission-banner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -66,10 +67,10 @@ export default async function SettingsPage() {
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-4">
-        <Card className="bg-white/84">
+        <Card className="bg-white/90">
           <CardContent className="space-y-3 px-5 py-5">
             <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-[rgba(15,118,110,0.12)] text-[var(--secondary)]">
+              <div className="flex size-11 items-center justify-center rounded-[16px] bg-[rgba(11,89,101,0.1)] text-[var(--secondary)]">
                 <Globe className="size-5" />
               </div>
               <div>
@@ -96,10 +97,10 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white/84">
+        <Card className="bg-white/90">
           <CardContent className="space-y-3 px-5 py-5">
             <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-[rgba(249,115,22,0.12)] text-[var(--primary-strong)]">
+              <div className="flex size-11 items-center justify-center rounded-[16px] bg-[rgba(201,138,5,0.1)] text-[var(--primary-strong)]">
                 <ShieldCheck className="size-5" />
               </div>
               <div>
@@ -119,10 +120,10 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white/84">
+        <Card className="bg-white/90">
           <CardContent className="space-y-3 px-5 py-5">
             <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-[rgba(15,118,110,0.12)] text-[var(--secondary)]">
+              <div className="flex size-11 items-center justify-center rounded-[16px] bg-[rgba(11,89,101,0.1)] text-[var(--secondary)]">
                 <UsersRound className="size-5" />
               </div>
               <div>
@@ -136,10 +137,10 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white/84">
+        <Card className="bg-white/90">
           <CardContent className="space-y-3 px-5 py-5">
             <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-[rgba(21,28,35,0.08)] text-[var(--foreground)]">
+              <div className="flex size-11 items-center justify-center rounded-[16px] bg-[rgba(7,31,39,0.08)] text-[var(--foreground)]">
                 <CreditCard className="size-5" />
               </div>
               <div>
@@ -158,25 +159,25 @@ export default async function SettingsPage() {
         <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
           <WorkshopTeamAccessForm mechanicOptions={teamAccess.mechanicOptions} />
 
-          <Card className="bg-white/88">
-            <CardContent className="space-y-5 px-5 py-5">
-              <div className="space-y-2">
-                <Badge variant="primary">Equipo con acceso</Badge>
-                <div className="font-[family-name:var(--font-heading)] text-2xl font-bold tracking-tight">
+          <Card className="overflow-hidden bg-white/90">
+            <div className="mesh-panel subtle-grid p-5 text-white">
+              <Badge variant="dark">Equipo con acceso</Badge>
+              <div className="mt-3 font-[family-name:var(--font-heading)] text-2xl font-bold tracking-tight">
                   {teamAccess.members.length} integrante{teamAccess.members.length === 1 ? "" : "s"} activo
                   {teamAccess.members.length === 1 ? "" : "s"}
-                </div>
-                <p className="text-sm leading-6 text-[var(--muted)]">
-                  Desde aqui puedes controlar quien entra a Fixy y con que alcance operativo.
-                </p>
               </div>
+              <p className="mt-2 text-sm leading-6 text-white/72">
+                Controla quien entra a Fixy y con que alcance operativo.
+              </p>
+            </div>
+            <CardContent className="space-y-5 px-5 py-5">
 
               <div className="space-y-3">
                 {teamAccess.members.length ? (
                   teamAccess.members.map((member) => (
                     <div
                       key={member.id}
-                      className="rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4"
+                      className="rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="font-medium">{member.full_name}</div>
@@ -189,7 +190,7 @@ export default async function SettingsPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[rgba(249,115,22,0.04)] p-4 text-sm leading-6 text-[var(--muted)]">
+                  <div className="rounded-[18px] border border-dashed border-[var(--line)] bg-[rgba(201,138,5,0.05)] p-4 text-sm leading-6 text-[var(--muted)]">
                     Aun no has dado acceso al equipo. Usa el formulario para invitar por correo o telefono.
                   </div>
                 )}
@@ -201,7 +202,7 @@ export default async function SettingsPage() {
                   teamAccess.invites.slice(0, 4).map((invite) => (
                     <div
                       key={invite.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-white/80 p-4"
+                      className="flex items-center justify-between gap-3 rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4"
                     >
                       <div>
                         <div className="font-medium">{invite.full_name}</div>
@@ -244,6 +245,8 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      <PasswordUpdateForm />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="bg-white/84">

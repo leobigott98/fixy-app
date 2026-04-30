@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Bell, Search } from "lucide-react";
+import { Bell, ChevronDown, Search } from "lucide-react";
 
 import { LogoutButton } from "@/components/layout/logout-button";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { hasModuleAccess, type AppRole } from "@/lib/permissions";
 
@@ -27,45 +26,24 @@ export function AppTopbar({
   const isCarOwner = role === "car_owner";
 
   return (
-    <div className="flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/72 p-4 shadow-[0_18px_40px_rgba(21,28,35,0.07)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="success">{isCarOwner ? "Movilidad al dia" : "Taller en marcha"}</Badge>
-          <Badge>{roleLabel}</Badge>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex size-12 items-center justify-center overflow-hidden rounded-2xl bg-[rgba(249,115,22,0.12)] text-[var(--primary-strong)]">
-            {workshopLogoUrl ? (
-              <img
-                alt={workshopName}
-                className="size-full object-cover"
-                src={workshopLogoUrl}
-              />
-            ) : (
-              <span className="font-[family-name:var(--font-heading)] text-lg font-bold">
-                {workshopName.slice(0, 1)}
-              </span>
-            )}
-          </div>
-          <div>
-            <div className="font-[family-name:var(--font-heading)] text-xl font-bold tracking-tight">
-              {workshopName}
-            </div>
-            <div className="text-sm text-[var(--muted)]">
-              {isCarOwner
-                ? `Hola, ${userName}. Todo tu carro y tus citas en una sola vista.`
-                : `Hola, ${userName}. Base lista para operar desde movil y escritorio.`}
-            </div>
-          </div>
-        </div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-2 text-sm font-semibold text-[var(--foreground)]">
+        <Link className="text-[var(--foreground)] hover:text-[var(--primary-strong)]" href="/">
+          Fixy
+        </Link>
+        <span className="text-[var(--muted)]">›</span>
+        <span>{isCarOwner ? "Mi garage" : workshopName}</span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" aria-label="Buscar">
-          <Search className="size-4" />
-        </Button>
+      <div className="flex items-center gap-2 sm:min-w-[440px] sm:justify-end">
+        <div className="hidden flex-1 items-center gap-3 rounded-[16px] bg-[var(--surface-dark)] px-4 py-3 text-white shadow-[0_18px_36px_rgba(7,31,39,0.16)] sm:flex">
+          <Search className="size-5 text-[var(--primary)]" />
+          <span className="text-sm text-white/72">
+            {isCarOwner ? "Buscar en mi garage..." : "Buscar en mi taller..."}
+          </span>
+        </div>
         {canOpenNotifications ? (
-          <Button asChild className="relative" variant="outline" size="icon">
+          <Button asChild className="relative bg-[var(--surface-dark)] text-[var(--primary)] hover:bg-[var(--surface-deep)]" variant="default" size="icon">
             <Link aria-label="Notificaciones" href="/app/notifications">
               <Bell className="size-4" />
               {notificationCount > 0 ? (
@@ -76,6 +54,24 @@ export function AppTopbar({
             </Link>
           </Button>
         ) : null}
+        <div className="flex items-center gap-2 rounded-[16px] bg-[var(--surface-dark)] p-1.5 text-white">
+          <div className="flex size-10 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)] text-sm font-bold">
+            {workshopLogoUrl ? (
+              <img alt={workshopName} className="size-full object-cover" src={workshopLogoUrl} />
+            ) : (
+              userName
+                .split(" ")
+                .map((part) => part[0])
+                .join("")
+                .slice(0, 2)
+            )}
+          </div>
+          <div className="hidden min-w-0 pr-1 sm:block">
+            <div className="max-w-28 truncate text-sm font-semibold">{userName}</div>
+            <div className="text-xs text-white/56">{roleLabel}</div>
+          </div>
+          <ChevronDown className="hidden size-4 text-white/62 sm:block" />
+        </div>
         <LogoutButton />
       </div>
     </div>

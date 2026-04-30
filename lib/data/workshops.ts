@@ -9,7 +9,7 @@ import {
   normalizeSessionPhone,
 } from "@/lib/auth/session-utils";
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseAdminClient, createSupabasePublicAuthClient } from "@/lib/supabase/admin";
 import type { WorkshopRole } from "@/lib/permissions";
 import {
   buildOpeningHoursLabel,
@@ -211,6 +211,14 @@ type WorkshopSlugLookupRecord = {
   public_slug: string | null;
 };
 
+type InviteDelivery = "none" | "email_invite_sent" | "password_setup_sent" | "sms_ready";
+
+type InviteResult = {
+  kind: "invited" | "updated" | "resent";
+  delivery?: InviteDelivery;
+  deliveryError?: string | null;
+};
+
 function getMonthSeries(months: number) {
   const now = new Date();
 
@@ -330,6 +338,29 @@ function normalizeOptionalPhone(phone?: string | null) {
   return digits || null;
 }
 
+function getResetPasswordRedirectTo(origin?: string | null) {
+  if (!origin) {
+    return undefined;
+  }
+
+  return new URL("/reset-password", origin).toString();
+}
+
+function isAlreadyRegisteredAuthError(message: string) {
+  return /already registered|already been registered|already exists|exists/i.test(message);
+}
+
+function buildInviteAuthMetadata(params: {
+  fullName: string;
+  role: WorkshopRole;
+}) {
+  return {
+    full_name: params.fullName,
+    fixy_role: params.role,
+    account_type: "workshop",
+  };
+}
+
 async function ensureMechanicProfileForInvite(params: {
   workshopId: string;
   fullName: string;
@@ -391,10 +422,7 @@ async function ensureAuthUserForInvite(params: {
       phone: params.phone ?? undefined,
       phone_confirm: Boolean(params.phone),
       password: randomPassword,
-      user_metadata: {
-        full_name: params.fullName,
-        fixy_role: params.role,
-      },
+      user_metadata: buildInviteAuthMetadata(params),
     });
 
     if (error && !/already registered|exists/i.test(error.message)) {
@@ -407,6 +435,55 @@ async function ensureAuthUserForInvite(params: {
 
     throw error;
   }
+}
+
+async function sendInviteAccessEmail(params: {
+  email?: string | null;
+  phone?: string | null;
+  fullName: string;
+  role: WorkshopRole;
+  origin?: string | null;
+}): Promise<InviteDelivery> {
+  if (!params.email) {
+    return params.phone ? "sms_ready" : "none";
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Falta SUPABASE_SERVICE_ROLE_KEY para enviar invitaciones de acceso.");
+  }
+
+  const redirectTo = getResetPasswordRedirectTo(params.origin);
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.auth.admin.inviteUserByEmail(params.email, {
+    redirectTo,
+    data: buildInviteAuthMetadata(params),
+  });
+
+  if (!error) {
+    return "email_invite_sent";
+  }
+
+  if (!isAlreadyRegisteredAuthError(error.message)) {
+    throw error;
+  }
+
+  await ensureAuthUserForInvite({
+    email: params.email,
+    phone: params.phone,
+    fullName: params.fullName,
+    role: params.role,
+  });
+
+  const publicAuth = createSupabasePublicAuthClient();
+  const { error: recoveryError } = await publicAuth.auth.resetPasswordForEmail(params.email, {
+    redirectTo,
+  });
+
+  if (recoveryError) {
+    throw recoveryError;
+  }
+
+  return "password_setup_sent";
 }
 
 async function findMemberByIdentifier(identifier: string) {
@@ -582,13 +659,15 @@ export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess 
 
   const membership = await findMemberByIdentifier(session.user.loginIdentifier);
 
-  if (!membership) {
+  const acceptedInvite = membership ?? (await acceptWorkshopInviteForIdentifier(session.user.loginIdentifier));
+
+  if (!acceptedInvite) {
     return null;
   }
 
-  const workshop = Array.isArray(membership.workshops)
-    ? membership.workshops[0] ?? null
-    : membership.workshops;
+  const workshop = Array.isArray(acceptedInvite.workshops)
+    ? acceptedInvite.workshops[0] ?? null
+    : acceptedInvite.workshops;
 
   if (!workshop) {
     return null;
@@ -596,18 +675,18 @@ export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess 
 
   return {
     workshop,
-    role: membership.role,
+    role: acceptedInvite.role,
     member: {
-      id: membership.id,
-      workshop_id: membership.workshop_id,
-      email: membership.email,
-      phone: membership.phone,
-      full_name: membership.full_name,
-      role: membership.role,
-      mechanic_id: membership.mechanic_id,
-      is_active: membership.is_active,
-      created_at: membership.created_at,
-      updated_at: membership.updated_at,
+      id: acceptedInvite.id,
+      workshop_id: acceptedInvite.workshop_id,
+      email: acceptedInvite.email,
+      phone: acceptedInvite.phone,
+      full_name: acceptedInvite.full_name,
+      role: acceptedInvite.role,
+      mechanic_id: acceptedInvite.mechanic_id,
+      is_active: acceptedInvite.is_active,
+      created_at: acceptedInvite.created_at,
+      updated_at: acceptedInvite.updated_at,
     },
   };
 }
@@ -752,7 +831,8 @@ export async function inviteWorkshopMember(values: {
   phone?: string | null;
   mechanicId?: string | null;
   message?: string | null;
-}) {
+  origin?: string | null;
+}): Promise<InviteResult> {
   const access = await getCurrentWorkshopAccess();
 
   if (!access || access.role !== "owner") {
@@ -782,6 +862,21 @@ export async function inviteWorkshopMember(values: {
     throw existingMemberError;
   }
 
+  const existingInviteQuery = supabase
+    .from("workshop_member_invites")
+    .select("*")
+    .eq("workshop_id", access.workshop.id)
+    .eq("status", "pending")
+    .limit(1);
+
+  const { data: existingInviteData, error: existingInviteError } = await (email
+    ? existingInviteQuery.eq("email", email).maybeSingle()
+    : existingInviteQuery.eq("phone", phone).maybeSingle());
+
+  if (existingInviteError && !isMissingRelationError(existingInviteError)) {
+    throw existingInviteError;
+  }
+
   const mechanicId =
     values.mechanicId ??
     (await ensureMechanicProfileForInvite({
@@ -791,13 +886,6 @@ export async function inviteWorkshopMember(values: {
       role: values.role,
       mechanicId: values.mechanicId,
     }));
-
-  await ensureAuthUserForInvite({
-    email,
-    phone,
-    fullName: values.fullName,
-    role: values.role,
-  });
 
   if (existingMemberData) {
     const { error } = await supabase
@@ -815,11 +903,10 @@ export async function inviteWorkshopMember(values: {
       throw error;
     }
 
-    return { kind: "updated" as const };
+    return { kind: "updated" };
   }
 
-  const { error } = await supabase.from("workshop_member_invites").insert({
-    workshop_id: access.workshop.id,
+  const invitePayload = {
     full_name: values.fullName,
     role: values.role,
     email,
@@ -827,13 +914,49 @@ export async function inviteWorkshopMember(values: {
     mechanic_id: mechanicId,
     invited_by_name: access.member?.full_name ?? access.workshop.owner_name,
     message: values.message?.trim() || null,
-  });
+  };
+
+  const existingInvite = (existingInviteData as WorkshopInviteRecord | null) ?? null;
+  const { error } = existingInvite
+    ? await supabase
+        .from("workshop_member_invites")
+        .update({
+          ...invitePayload,
+          invited_at: new Date().toISOString(),
+        })
+        .eq("id", existingInvite.id)
+    : await supabase.from("workshop_member_invites").insert({
+        workshop_id: access.workshop.id,
+        ...invitePayload,
+      });
 
   if (error) {
     throw error;
   }
 
-  return { kind: "invited" as const };
+  try {
+    const delivery = await sendInviteAccessEmail({
+      email,
+      phone,
+      fullName: values.fullName,
+      role: values.role,
+      origin: values.origin,
+    });
+
+    return {
+      kind: existingInvite ? "resent" : "invited",
+      delivery,
+    };
+  } catch (deliveryError) {
+    return {
+      kind: existingInvite ? "resent" : "invited",
+      delivery: "none",
+      deliveryError:
+        deliveryError instanceof Error
+          ? deliveryError.message
+          : "No se pudo enviar el correo de acceso.",
+    };
+  }
 }
 
 export async function getPublicWorkshopBySlug(slug: string) {

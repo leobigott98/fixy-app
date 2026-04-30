@@ -5,25 +5,25 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-2xl text-sm font-semibold whitespace-nowrap transition disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 rounded-[18px] text-sm font-semibold whitespace-nowrap transition disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
-          "bg-[var(--foreground)] px-4 py-3 text-white shadow-[0_18px_32px_rgba(21,28,35,0.18)] hover:-translate-y-0.5 hover:bg-[#1d2730]",
+          "bg-[var(--surface-dark)] px-4 py-3 text-white shadow-[0_16px_28px_rgba(7,31,39,0.18)] hover:-translate-y-0.5 hover:bg-[var(--surface-deep)]",
         primary:
-          "bg-[var(--primary)] px-4 py-3 text-white shadow-[0_18px_32px_rgba(249,115,22,0.26)] hover:-translate-y-0.5 hover:bg-[var(--primary-strong)]",
+          "bg-[var(--primary)] px-4 py-3 text-white shadow-[0_16px_28px_rgba(201,138,5,0.24)] hover:-translate-y-0.5 hover:bg-[var(--primary-strong)]",
         secondary:
-          "bg-[var(--secondary)] px-4 py-3 text-white shadow-[0_18px_32px_rgba(15,118,110,0.24)] hover:-translate-y-0.5 hover:bg-[#115f58]",
+          "bg-[var(--secondary)] px-4 py-3 text-white shadow-[0_16px_28px_rgba(11,89,101,0.2)] hover:-translate-y-0.5 hover:bg-[#074853]",
         outline:
-          "border border-[var(--line)] bg-white/80 px-4 py-3 text-[var(--foreground)] hover:-translate-y-0.5 hover:bg-white",
+          "border border-[var(--line)] bg-white/86 px-4 py-3 text-[var(--foreground)] hover:-translate-y-0.5 hover:bg-white",
         ghost: "px-3 py-2 text-[var(--muted)] hover:bg-black/5 hover:text-[var(--foreground)]",
       },
       size: {
         default: "",
         sm: "rounded-xl px-3 py-2 text-sm",
-        lg: "rounded-3xl px-5 py-3.5 text-base",
-        icon: "size-10 rounded-2xl",
+        lg: "rounded-[22px] px-5 py-3.5 text-base",
+        icon: "size-10 rounded-[16px]",
       },
     },
     defaultVariants: {

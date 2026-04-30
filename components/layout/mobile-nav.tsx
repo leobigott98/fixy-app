@@ -17,7 +17,7 @@ export function MobileNav({ role, notificationCount = 0 }: MobileNavProps) {
   const navigation = getMobileNavigation(role);
 
   return (
-    <nav className="fixed inset-x-4 bottom-4 z-40 rounded-[28px] border border-white/60 bg-white/92 p-2 shadow-[0_20px_50px_rgba(21,28,35,0.18)] backdrop-blur lg:hidden">
+    <nav className="fixed inset-x-4 bottom-4 z-40 rounded-[24px] border border-white/60 bg-[var(--surface-dark)] p-2 shadow-[0_20px_50px_rgba(7,31,39,0.22)] backdrop-blur lg:hidden">
       <div className={cn("gap-1", navigation.length >= 5 ? "grid grid-cols-5" : "grid grid-cols-4")}>
         {navigation.map((item) => {
           const Icon = item.icon;
@@ -28,10 +28,10 @@ export function MobileNav({ role, notificationCount = 0 }: MobileNavProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                "relative flex flex-col items-center gap-1 rounded-[20px] px-2 py-2 text-[11px] font-semibold",
+                "relative flex flex-col items-center gap-1 rounded-[18px] px-2 py-2 text-[11px] font-semibold",
                 isActive
-                  ? "bg-[var(--foreground)] text-white"
-                  : "text-[var(--muted)] hover:bg-black/5 hover:text-[var(--foreground)]",
+                  ? "bg-[var(--primary)] text-white"
+                  : "text-white/70 hover:bg-white/8 hover:text-white",
               )}
             >
               <Icon className="size-4" />

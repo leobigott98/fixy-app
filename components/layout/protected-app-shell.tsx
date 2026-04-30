@@ -44,8 +44,10 @@ export function ProtectedAppShell({
       <AppSidebar
         notificationCount={notificationCount}
         role={role}
+        roleLabel={roleLabel}
         workshopLogoUrl={workshopLogoUrl}
         workshopName={workshopName}
+        userName={userName}
       />
       <div className="flex min-h-screen flex-1 flex-col px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-8 lg:pt-6">
         <AppTopbar

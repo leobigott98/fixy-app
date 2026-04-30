@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 
 type AppSidebarProps = {
   role: AppRole;
+  roleLabel: string;
+  userName: string;
   workshopName?: string;
   workshopLogoUrl?: string;
   notificationCount?: number;
@@ -18,6 +20,8 @@ type AppSidebarProps = {
 
 export function AppSidebar({
   role,
+  roleLabel,
+  userName,
   workshopName,
   workshopLogoUrl,
   notificationCount = 0,
@@ -26,10 +30,29 @@ export function AppSidebar({
   const navigation = getPrimaryNavigation(role);
   const isCarOwner = role === "car_owner";
   return (
-    <aside className="fixy-shell hidden w-[280px] shrink-0 border-r border-[var(--line)] px-5 py-6 lg:flex lg:flex-col">
-      <FixyLogo />
+    <aside className="fixy-shell hidden w-[292px] shrink-0 border-r border-white/10 px-5 py-6 lg:flex lg:flex-col">
+      <FixyLogo className="text-white [&_.fixy-logo-subtitle]:text-white/62" />
 
-      <div className="mt-8 space-y-2">
+      <div className="mt-8 grid grid-cols-2 gap-1 rounded-[14px] border border-white/18 bg-white/5 p-1">
+        <div
+          className={cn(
+            "rounded-[10px] px-3 py-2 text-center text-sm font-bold",
+            isCarOwner ? "bg-[var(--primary)] text-white" : "text-white/68",
+          )}
+        >
+          Mi garage
+        </div>
+        <div
+          className={cn(
+            "rounded-[10px] px-3 py-2 text-center text-sm font-bold",
+            !isCarOwner ? "bg-[var(--primary)] text-white" : "text-white/68",
+          )}
+        >
+          Taller
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-1.5">
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
@@ -39,10 +62,10 @@ export function AppSidebar({
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium",
+                "relative flex items-center gap-3 rounded-[16px] px-4 py-3 text-sm font-semibold",
                 isActive
-                  ? "bg-[var(--foreground)] text-white shadow-[0_18px_32px_rgba(21,28,35,0.18)]"
-                  : "text-[var(--muted)] hover:bg-white/88 hover:text-[var(--foreground)]",
+                  ? "bg-white/10 text-[var(--primary)] shadow-[inset_4px_0_0_var(--primary)]"
+                  : "text-white/78 hover:bg-white/7 hover:text-white",
               )}
             >
               <Icon className="size-4" />
@@ -52,8 +75,8 @@ export function AppSidebar({
                   className={cn(
                     "ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold",
                     isActive
-                      ? "bg-white/16 text-white"
-                      : "bg-[rgba(249,115,22,0.12)] text-[var(--primary-strong)]",
+                      ? "bg-[var(--primary)] text-white"
+                      : "bg-white/12 text-white",
                   )}
                 >
                   {notificationCount > 9 ? "9+" : notificationCount}
@@ -64,10 +87,9 @@ export function AppSidebar({
         })}
       </div>
 
-      <div className="mt-auto rounded-[28px] bg-[var(--surface-dark)] p-5 text-white">
-        <Badge variant="dark">{isCarOwner ? "Cuenta activa" : "Taller activo"}</Badge>
-        <div className="mt-4 flex items-center gap-4">
-          <div className="flex size-14 items-center justify-center overflow-hidden rounded-[20px] bg-white/10">
+      <div className="mt-auto border-t border-white/10 pt-5 text-white">
+        <div className="flex items-center gap-4">
+          <div className="flex size-12 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)] text-white">
             {workshopLogoUrl ? (
               <img
                 alt={workshopName || "Logo del taller"}
@@ -76,20 +98,17 @@ export function AppSidebar({
               />
             ) : (
               <div className="font-[family-name:var(--font-heading)] text-lg font-bold tracking-tight text-white">
-                {workshopName?.slice(0, 1) || "F"}
+                {(userName || workshopName || "F").slice(0, 1)}
               </div>
             )}
           </div>
-          <div className="space-y-2">
-            <div className="font-[family-name:var(--font-heading)] text-xl font-bold tracking-tight">
-              {workshopName || (isCarOwner ? "Mi garage" : "Configura tu taller")}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">
+              {userName || workshopName || (isCarOwner ? "Mi garage" : "Configura tu taller")}
             </div>
-            <p className="text-sm leading-6 text-white/70">
-              {isCarOwner
-                ? "Perfil, carros, citas e historial listos desde el telefono."
-                : "Shell operativa lista para dashboard, presupuestos, ordenes y seguimiento visual."}
-            </p>
+            <div className="text-xs text-white/62">{roleLabel}</div>
           </div>
+          <span className="text-xl text-white/54">›</span>
         </div>
       </div>
     </aside>

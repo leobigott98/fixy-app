@@ -87,35 +87,35 @@ export default async function DashboardPage() {
     title: string;
     description: string;
     icon: typeof ClipboardList;
-    variant: "primary" | "outline";
+    tone: "dark" | "gold" | "light";
   }> = [
     {
       href: "/app/quotes/new" as Route,
       title: "Nuevo presupuesto",
       description: "Cotiza rapido y manda algo profesional.",
       icon: ClipboardList,
-      variant: "primary",
+      tone: "dark",
     },
     {
       href: "/app/work-orders/new" as Route,
       title: "Nueva Orden",
       description: "Abre trabajo manualmente sin pasar por presupuesto.",
       icon: Wrench,
-      variant: "primary",
+      tone: "gold",
     },
     {
       href: "/app/clients" as Route,
       title: "Clientes",
       description: "Revisa y crea fichas rapidamente.",
       icon: ContactRound,
-      variant: "outline",
+      tone: "light",
     },
     {
       href: "/app/finances/payments/new" as Route,
       title: "Registrar cobro",
       description: "Carga pagos sin salir del flujo operativo.",
       icon: Coins,
-      variant: "outline",
+      tone: "light",
     },
   ];
 
@@ -133,28 +133,9 @@ export default async function DashboardPage() {
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {quickActions.map((action) => {
-          const Icon = action.icon;
-
-          return (
-            <Button
-              asChild
-              className="h-auto justify-start rounded-[24px] p-4 text-left"
-              key={action.title}
-              variant={action.variant}
-            >
-              <Link href={action.href}>
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-white/82 text-[var(--primary-strong)]">
-                  <Icon className="size-5" />
-                </div>
-                <div className="space-y-1">
-                  <div className="font-semibold">{action.title}</div>
-                  <div className="text-sm leading-6 text-[var(--muted)]">{action.description}</div>
-                </div>
-              </Link>
-            </Button>
-          );
-        })}
+        {quickActions.map((action) => (
+          <WorkshopActionTile key={action.title} {...action} />
+        ))}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
@@ -518,6 +499,55 @@ function FinanceDashboard({
         description="Tu acceso incluye cobranzas, reportes, inventario, compras y operacion cliente para cerrar el circuito de dinero."
       />
     </div>
+  );
+}
+
+function WorkshopActionTile({
+  href,
+  title,
+  description,
+  icon: Icon,
+  tone,
+}: {
+  href: Route;
+  title: string;
+  description: string;
+  icon: typeof ClipboardList;
+  tone: "dark" | "gold" | "light";
+}) {
+  const isDark = tone === "dark";
+  const isGold = tone === "gold";
+
+  return (
+    <Link
+      href={href}
+      className={[
+        "group flex min-h-[168px] flex-col justify-between rounded-[22px] border p-5 shadow-[0_16px_34px_rgba(7,31,39,0.08)]",
+        isDark
+          ? "border-white/10 bg-[var(--surface-dark)] text-white"
+          : isGold
+            ? "fixy-gold-panel border-transparent"
+            : "border-[var(--line)] bg-white/88 text-[var(--foreground)]",
+      ].join(" ")}
+    >
+      <div>
+        <div
+          className={[
+            "flex size-12 items-center justify-center rounded-[16px]",
+            isDark || isGold
+              ? "bg-white/10 text-white"
+              : "bg-[rgba(201,138,5,0.1)] text-[var(--primary-strong)]",
+          ].join(" ")}
+        >
+          <Icon className="size-5" />
+        </div>
+        <div className="mt-5 font-[family-name:var(--font-heading)] text-xl font-bold">{title}</div>
+        <p className={["mt-2 text-sm leading-6", isDark || isGold ? "text-white/78" : "text-[var(--muted)]"].join(" ")}>
+          {description}
+        </p>
+      </div>
+      <ArrowUpRight className="ml-auto size-5 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+    </Link>
   );
 }
 

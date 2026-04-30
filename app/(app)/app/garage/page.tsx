@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { CalendarClock, CarFront, ClipboardList, Search, Wrench } from "lucide-react";
+import { ArrowRight, CalendarClock, CarFront, ClipboardList, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -17,35 +17,35 @@ export default async function OwnerGaragePage() {
     label: string;
     description: string;
     icon: typeof CarFront;
-    variant: "primary" | "outline";
+    tone: "dark" | "gold" | "light";
   }> = [
     {
       href: "/app/my-cars/new" as Route,
       label: "Agregar carro",
       description: "Carga fotos, datos y deja lista la ficha.",
       icon: CarFront,
-      variant: "primary",
+      tone: "dark",
     },
     {
       href: "/app/workshops" as Route,
       label: "Buscar talleres",
       description: "Descubre opciones reales sin friccion.",
       icon: Search,
-      variant: "primary",
+      tone: "gold",
     },
     {
       href: "/app/appointments/new" as Route,
       label: "Pedir cita",
       description: "Solicita atencion con tu carro ya seleccionado.",
       icon: CalendarClock,
-      variant: "outline",
+      tone: "light",
     },
     {
       href: "/app/history/new" as Route,
       label: "Registrar servicio",
       description: "Guarda mantenimiento o reparaciones.",
       icon: ClipboardList,
-      variant: "outline",
+      tone: "light",
     },
   ];
 
@@ -53,33 +53,14 @@ export default async function OwnerGaragePage() {
     <div className="space-y-6">
       <PageHeader
         title={`Garage de ${dashboard.profile.fullName}`}
-        description="Tu vista movil para carros, talleres, citas y trazabilidad de servicios en un solo lugar."
-        status="Mi Fixy"
+        description="Tu vista movil para carros, talleres, citas y trazabilidad de servicios."
+        status="Movilidad al dia"
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {quickActions.map((action) => {
-          const Icon = action.icon;
-
-          return (
-            <Button
-              asChild
-              className="h-auto justify-start rounded-[24px] p-4 text-left"
-              key={action.label}
-              variant={action.variant}
-            >
-              <Link href={action.href}>
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-white/82 text-[var(--primary-strong)]">
-                  <Icon className="size-5" />
-                </div>
-                <div className="space-y-1">
-                  <div className="font-semibold">{action.label}</div>
-                  <div className="text-sm leading-6 text-[var(--muted)]">{action.description}</div>
-                </div>
-              </Link>
-            </Button>
-          );
-        })}
+        {quickActions.map((action) => (
+          <ActionTile key={action.label} {...action} />
+        ))}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -92,23 +73,37 @@ export default async function OwnerGaragePage() {
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="bg-white/88">
           <CardHeader>
-            <CardTitle>Mis carros</CardTitle>
-            <CardDescription>Fichas listas para pedir cita y guardar servicios.</CardDescription>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle>Mis carros</CardTitle>
+                <CardDescription>Fichas listas para pedir cita y guardar servicios.</CardDescription>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link href={"/app/my-cars" as Route}>Ver todos</Link>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {dashboard.vehicles.length ? (
               dashboard.vehicles.map((vehicle) => (
-                <div key={vehicle.id} className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
+                <div key={vehicle.id} className="rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-semibold">{vehicle.label}</div>
-                      <div className="text-sm text-[var(--muted)]">
-                        {[vehicle.color, vehicle.plate].filter(Boolean).join(" · ") || "Ficha basica lista"}
+                    <div className="flex items-center gap-4">
+                      {vehicle.photoUrls[0] ? (
+                        <img alt={vehicle.label} className="size-20 rounded-[16px] object-cover" src={vehicle.photoUrls[0]} />
+                      ) : (
+                        <div className="flex size-20 items-center justify-center rounded-[16px] bg-[rgba(201,138,5,0.1)] text-[var(--primary-strong)]">
+                          <CarFront className="size-7" />
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-semibold">{vehicle.label}</div>
+                        <div className="mt-1 text-sm text-[var(--muted)]">
+                          {[vehicle.color, vehicle.plate].filter(Boolean).join(" · ") || "Ficha basica lista"}
+                        </div>
                       </div>
                     </div>
-                    {vehicle.photoUrls[0] ? (
-                      <img alt={vehicle.label} className="size-16 rounded-2xl object-cover" src={vehicle.photoUrls[0]} />
-                    ) : null}
+                    <Badge variant="success">Activo</Badge>
                   </div>
                 </div>
               ))
@@ -125,25 +120,36 @@ export default async function OwnerGaragePage() {
 
         <Card className="bg-white/88">
           <CardHeader>
-            <CardTitle>Proximas citas</CardTitle>
-            <CardDescription>Solicitudes que aun requieren atencion o confirmacion.</CardDescription>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle>Proximas citas</CardTitle>
+                <CardDescription>Solicitudes que aun requieren atencion o confirmacion.</CardDescription>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link href={"/app/appointments" as Route}>Ver todas</Link>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {dashboard.upcomingAppointments.length ? (
               dashboard.upcomingAppointments.map((appointment) => (
-                <div key={appointment.id} className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
-                  <div className="flex items-center justify-between gap-3">
+                <div key={appointment.id} className="grid gap-3 rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4 sm:grid-cols-[56px_1fr_auto] sm:items-center">
+                  <div className="flex size-14 flex-col items-center justify-center rounded-[16px] bg-[var(--surface-dark)] text-white">
+                    <span className="font-[family-name:var(--font-heading)] text-lg font-bold">
+                      {appointment.requestedDate?.slice(-2) || "--"}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase text-white/68">Cita</span>
+                  </div>
+                  <div>
                     <div className="font-semibold">{appointment.workshop.name}</div>
-                    <Badge variant={appointment.status === "confirmada" ? "success" : "primary"}>
-                      {appointment.status}
-                    </Badge>
+                    <div className="mt-1 text-sm text-[var(--muted)]">
+                      {[appointment.requestedTime, appointment.vehicle?.label].filter(Boolean).join(" · ")}
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-[var(--muted)]">{appointment.issueSummary}</div>
                   </div>
-                  <div className="mt-2 text-sm text-[var(--muted)]">
-                    {[appointment.requestedDate, appointment.requestedTime, appointment.vehicle?.label]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-[var(--muted)]">{appointment.issueSummary}</div>
+                  <Badge variant={appointment.status === "confirmada" ? "success" : "primary"}>
+                    {appointment.status === "confirmada" ? "Confirmada" : "Pendiente"}
+                  </Badge>
                 </div>
               ))
             ) : (
@@ -167,7 +173,7 @@ export default async function OwnerGaragePage() {
           <CardContent className="space-y-3">
             {dashboard.recentServices.length ? (
               dashboard.recentServices.map((service) => (
-                <div key={service.id} className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
+                <div key={service.id} className="rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="font-semibold">{service.serviceType}</div>
@@ -175,7 +181,7 @@ export default async function OwnerGaragePage() {
                         {[service.workshopName, service.vehicle?.label, service.serviceDate].filter(Boolean).join(" · ")}
                       </div>
                     </div>
-                    <div className="text-sm font-medium">
+                    <div className="text-sm font-semibold">
                       {formatCurrencyDisplay(service.totalCost, service.currency)}
                     </div>
                   </div>
@@ -200,7 +206,7 @@ export default async function OwnerGaragePage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {dashboard.spotlightWorkshops.map((workshop) => (
-              <div key={workshop.id} className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
+              <div key={workshop.id} className="rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="font-semibold">{workshop.workshop_name}</div>
@@ -221,6 +227,55 @@ export default async function OwnerGaragePage() {
   );
 }
 
+function ActionTile({
+  href,
+  label,
+  description,
+  icon: Icon,
+  tone,
+}: {
+  href: Route;
+  label: string;
+  description: string;
+  icon: typeof CarFront;
+  tone: "dark" | "gold" | "light";
+}) {
+  const isDark = tone === "dark";
+  const isGold = tone === "gold";
+
+  return (
+    <Link
+      href={href}
+      className={[
+        "group flex min-h-[168px] flex-col justify-between rounded-[22px] border p-5 shadow-[0_16px_34px_rgba(7,31,39,0.08)]",
+        isDark
+          ? "border-white/10 bg-[var(--surface-dark)] text-white"
+          : isGold
+            ? "fixy-gold-panel border-transparent"
+            : "border-[var(--line)] bg-white/88 text-[var(--foreground)]",
+      ].join(" ")}
+    >
+      <div>
+        <div
+          className={[
+            "flex size-12 items-center justify-center rounded-[16px]",
+            isDark || isGold
+              ? "bg-white/10 text-white"
+              : "bg-[rgba(201,138,5,0.1)] text-[var(--primary-strong)]",
+          ].join(" ")}
+        >
+          <Icon className="size-5" />
+        </div>
+        <div className="mt-5 font-[family-name:var(--font-heading)] text-xl font-bold">{label}</div>
+        <p className={["mt-2 text-sm leading-6", isDark || isGold ? "text-white/78" : "text-[var(--muted)]"].join(" ")}>
+          {description}
+        </p>
+      </div>
+      <ArrowRight className="ml-auto size-5 transition group-hover:translate-x-1" />
+    </Link>
+  );
+}
+
 function MetricCard({
   label,
   value,
@@ -234,14 +289,17 @@ function MetricCard({
 }) {
   return (
     <Card className="bg-white/88">
-      <CardContent className="space-y-2 px-5 py-5">
-        <div className="text-sm text-[var(--muted)]">{label}</div>
-        <div className="font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
+      <CardContent className="space-y-3 px-5 py-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm text-[var(--foreground)]">{label}</div>
+          <Badge variant={tone === "primary" ? "primary" : tone === "success" ? "success" : "default"}>
+            {tone === "primary" ? "Clave" : tone === "success" ? "OK" : "Base"}
+          </Badge>
+        </div>
+        <div className="font-[family-name:var(--font-heading)] text-4xl font-bold tracking-tight">
           {value}
         </div>
-        <Badge variant={tone === "primary" ? "primary" : tone === "success" ? "success" : "default"}>
-          {helper}
-        </Badge>
+        <div className="text-sm leading-6 text-[var(--muted)]">{helper}</div>
       </CardContent>
     </Card>
   );
@@ -259,7 +317,7 @@ function EmptyBlock({
   actionLabel: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-dashed border-[var(--line)] bg-[rgba(249,115,22,0.04)] p-5">
+    <div className="rounded-[18px] border border-dashed border-[var(--line)] bg-[rgba(201,138,5,0.05)] p-5">
       <div className="font-semibold">{title}</div>
       <div className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</div>
       <div className="mt-4">

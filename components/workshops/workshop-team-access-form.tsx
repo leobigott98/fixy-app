@@ -58,15 +58,15 @@ export function WorkshopTeamAccessForm({ mechanicOptions }: WorkshopTeamAccessFo
   });
 
   return (
-    <Card className="bg-white/88">
-      <CardHeader>
-        <Badge variant="primary">Acceso del equipo</Badge>
-        <CardTitle>Invita al personal del taller</CardTitle>
-        <CardDescription>
-          El propietario define el rol y la persona entra con su correo o telefono.
+    <Card className="overflow-hidden bg-white/90">
+      <CardHeader className="mesh-panel subtle-grid text-white">
+        <Badge variant="dark">Acceso del equipo</Badge>
+        <CardTitle className="text-white">Invita al personal del taller</CardTitle>
+        <CardDescription className="text-white/72">
+          El propietario define el rol, alcance y vinculacion operativa en una sola vista.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <form className="space-y-5" onSubmit={onSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
@@ -126,7 +126,7 @@ export function WorkshopTeamAccessForm({ mechanicOptions }: WorkshopTeamAccessFo
           />
 
           {formMessage ? (
-            <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[rgba(15,118,110,0.08)] px-4 py-3 text-sm text-[var(--secondary)]">
+            <div className="rounded-[18px] border border-[rgba(29,123,82,0.16)] bg-[rgba(29,123,82,0.08)] px-4 py-3 text-sm text-[var(--success)]">
               {formMessage}
             </div>
           ) : null}
@@ -136,7 +136,7 @@ export function WorkshopTeamAccessForm({ mechanicOptions }: WorkshopTeamAccessFo
               <UserPlus className="size-4" />
               Guardar invitacion
             </Button>
-            <div className="rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
+            <div className="rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
               Si existe un perfil operativo, se vincula para mostrar agenda, ordenes y comisiones.
             </div>
           </div>
@@ -171,7 +171,7 @@ function Field({
 
 function Tip({ icon, text }: { icon: ReactNode; text: string }) {
   return (
-    <div className="flex gap-3 rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 text-sm leading-6">
+    <div className="flex gap-3 rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4 text-sm leading-6">
       <span className="mt-0.5 shrink-0 text-[var(--primary-strong)]">{icon}</span>
       <span>{text}</span>
     </div>

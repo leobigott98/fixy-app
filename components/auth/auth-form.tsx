@@ -530,6 +530,12 @@ export function AuthForm({ variant, initialNoticeKey }: AuthFormProps) {
         values.authMethod === "email_otp"
           ? normalizeSessionEmail(values.identifier ?? "")
           : normalizeSessionPhone(values.identifier ?? "");
+
+      if (values.authMethod === "email_otp" && !isEmailIdentifier(identifier)) {
+        setError("identifier", { message: "Ingresa un correo valido para usar magic link." });
+        return;
+      }
+
       await requestOtp(identifier, values.authMethod === "email_otp" ? "email" : "sms");
       return;
     }
@@ -794,12 +800,24 @@ export function AuthForm({ variant, initialNoticeKey }: AuthFormProps) {
             </>
           ) : (
             <Field
-              label={authMethod === "sms_otp" ? "Telefono" : "Correo o telefono"}
+              label={
+                authMethod === "email_otp"
+                  ? "Correo"
+                  : authMethod === "sms_otp"
+                    ? "Telefono"
+                    : "Correo o telefono"
+              }
               error={errors.identifier?.message}
               input={
                 <Input
                   disabled={phase === "verify"}
-                  placeholder={authMethod === "sms_otp" ? "0414-1234567" : "taller@fixy.app o 0414-1234567"}
+                  placeholder={
+                    authMethod === "email_otp"
+                      ? "taller@fixy.app"
+                      : authMethod === "sms_otp"
+                        ? "0414-1234567"
+                        : "taller@fixy.app o 0414-1234567"
+                  }
                   {...register("identifier")}
                 />
               }
@@ -868,6 +886,32 @@ export function AuthForm({ variant, initialNoticeKey }: AuthFormProps) {
               >
                 Recuperar contrasena
               </Link>
+            </div>
+          ) : null}
+
+          {!isSignup && authMethod !== "password" && phase === "request" ? (
+            <div className="rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
+              Prefieres entrar con contrasena?{" "}
+              <button
+                className="font-semibold text-[var(--primary-strong)]"
+                onClick={() => {
+                  beginInteraction();
+                  setPhase("request");
+                  setPendingOtpTarget(null);
+                  setValue("authMethod", "password", {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                }}
+                type="button"
+              >
+                Cambiar a contrasena
+              </button>{" "}
+              o{" "}
+              <Link className="font-semibold text-[var(--primary-strong)]" href="/forgot-password">
+                crear una nueva
+              </Link>
+              .
             </div>
           ) : null}
 

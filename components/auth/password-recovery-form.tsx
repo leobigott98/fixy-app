@@ -15,7 +15,7 @@ import {
   normalizeAuthMessage,
   type AuthNotice as AuthNoticeValue,
 } from "@/lib/auth/auth-feedback";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabasePasswordRecoveryClient } from "@/lib/supabase/client";
 import { normalizeSessionEmail } from "@/lib/auth/session-utils";
 
 const schema = z.object({
@@ -29,11 +29,11 @@ function getRecoveryRedirect() {
     return undefined;
   }
 
-  return `${window.location.origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
+  return `${window.location.origin}/reset-password`;
 }
 
 export function PasswordRecoveryForm({ initialNoticeKey }: { initialNoticeKey?: string | null }) {
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => createSupabasePasswordRecoveryClient(), []);
   const [notice, setNotice] = useState<AuthNoticeValue | null>(null);
   const {
     register,

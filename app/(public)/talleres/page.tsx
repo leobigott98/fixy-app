@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Globe, MapPin, ShieldCheck } from "lucide-react";
+import { CalendarClock, Globe, ShieldCheck } from "lucide-react";
 
 import { FixyLogo } from "@/components/brand/fixy-logo";
 import { WorkshopDirectoryFilters } from "@/components/marketplace/workshop-directory-filters";
@@ -39,7 +39,7 @@ export default async function WorkshopDirectoryPage({ searchParams }: DirectoryP
   const directory = await getMarketplaceDirectory(filters);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#fff7ed_0%,#fff_32%,#f8fafc_100%)]">
+    <main className="min-h-screen">
       <section className="mx-auto max-w-7xl px-4 pb-14 pt-5 sm:px-6 lg:px-8 lg:pb-20 lg:pt-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <FixyLogo />
@@ -53,36 +53,41 @@ export default async function WorkshopDirectoryPage({ searchParams }: DirectoryP
           </div>
         </header>
 
-        <div className="grid gap-8 pt-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-end lg:pt-16">
-          <div className="space-y-5">
-            <Badge variant="primary">Discovery para conductores</Badge>
-            <div className="space-y-4">
-              <h1 className="max-w-4xl font-[family-name:var(--font-heading)] text-5xl font-bold tracking-tight sm:text-6xl">
-                Encuentra un taller confiable y pide atencion sin friccion.
-              </h1>
-              <p className="max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">
-                Fixy conecta perfiles de talleres reales con conductores que necesitan resolver
-                mantenimiento, diagnosticos y reparaciones de forma directa.
-              </p>
+        <div className="mesh-panel subtle-grid mt-10 overflow-hidden rounded-[24px] p-5 text-white shadow-[0_24px_60px_rgba(7,31,39,0.16)] sm:p-7 lg:mt-12">
+          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
+            <div className="space-y-5">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="dark">Discovery para conductores</Badge>
+                <Badge variant="dark">{directory.total} talleres visibles</Badge>
+              </div>
+              <div className="space-y-4">
+                <h1 className="max-w-4xl font-[family-name:var(--font-heading)] text-4xl font-bold tracking-tight sm:text-6xl">
+                  Encuentra un taller confiable y pide atencion sin friccion.
+                </h1>
+                <p className="max-w-2xl text-base leading-7 text-white/76 sm:text-lg">
+                  Fixy conecta perfiles de talleres reales con conductores que necesitan resolver
+                  mantenimiento, diagnosticos y reparaciones de forma directa.
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <DiscoveryPill
-              icon={<Globe className="size-4" />}
-              title="Busqueda simple"
-              text="Directorio movil-first con filtros por ubicacion y servicio."
-            />
-            <DiscoveryPill
-              icon={<ShieldCheck className="size-4" />}
-              title="Confianza primero"
-              text="Perfil publico, horario, contacto y base de resenas visibles."
-            />
-            <DiscoveryPill
-              icon={<MapPin className="size-4" />}
-              title="Lead generation"
-              text="Solicitud ligera y salida directa por WhatsApp."
-            />
+            <div className="grid gap-3 sm:grid-cols-3">
+              <DiscoveryPill
+                icon={<Globe className="size-4" />}
+                title="Busqueda simple"
+                text="Filtros por ubicacion y servicio."
+              />
+              <DiscoveryPill
+                icon={<ShieldCheck className="size-4" />}
+                title="Confianza"
+                text="Perfil, horario y resenas visibles."
+              />
+              <DiscoveryPill
+                icon={<CalendarClock className="size-4" />}
+                title="Solicitud"
+                text="Lead ligero y salida a WhatsApp."
+              />
+            </div>
           </div>
         </div>
 
@@ -152,12 +157,12 @@ function DiscoveryPill({
   text: string;
 }) {
   return (
-    <div className="rounded-[28px] border border-[var(--line)] bg-white/80 p-4 shadow-[0_18px_40px_rgba(21,28,35,0.06)]">
-      <div className="flex items-center gap-2 text-[var(--primary-strong)]">
+    <div className="rounded-[18px] border border-white/12 bg-white/8 p-4">
+      <div className="flex items-center gap-2 text-[var(--primary)]">
         {icon}
         <span className="text-sm font-semibold">{title}</span>
       </div>
-      <div className="mt-2 text-sm leading-6 text-[var(--muted)]">{text}</div>
+      <div className="mt-2 text-sm leading-6 text-white/68">{text}</div>
     </div>
   );
 }

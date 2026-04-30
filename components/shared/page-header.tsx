@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Home } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,16 +19,21 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, description, status, action }: PageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/72 p-5 shadow-[0_18px_40px_rgba(21,28,35,0.07)] sm:p-6 lg:flex-row lg:items-start lg:justify-between">
-      <div className="space-y-3">
-        {status ? <Badge variant="primary">{status}</Badge> : null}
+    <div className="mesh-panel subtle-grid flex flex-col gap-5 rounded-[22px] border border-white/10 p-5 text-white shadow-[0_22px_46px_rgba(7,31,39,0.16)] sm:p-7 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex gap-4">
+        <div className="hidden size-[74px] shrink-0 items-center justify-center rounded-[28px] bg-white/8 text-[var(--primary)] ring-1 ring-white/10 sm:flex">
+          <Home className="size-8" />
+        </div>
+        <div className="space-y-3">
+        {status ? <Badge variant="dark">{status}</Badge> : null}
         <div className="space-y-2">
           <h1 className="font-[family-name:var(--font-heading)] text-2xl font-bold tracking-tight sm:text-3xl">
             {title}
           </h1>
-          <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-base">
+          <p className="max-w-3xl text-sm leading-6 text-white/78 sm:text-base">
             {description}
           </p>
+        </div>
         </div>
       </div>
       {action ? (

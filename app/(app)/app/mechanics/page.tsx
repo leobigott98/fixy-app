@@ -90,11 +90,11 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
 
       {mechanics.length ? (
         view === "table" ? (
-          <Card className="bg-white/88">
+          <Card className="bg-white/90">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
-                  <thead className="bg-[rgba(21,28,35,0.04)] text-left text-[var(--muted)]">
+                  <thead className="bg-[#fbfaf7] text-left text-[var(--muted)]">
                     <tr>
                       <th className="px-5 py-4 font-semibold">Integrante</th>
                       <th className="px-5 py-4 font-semibold">Rol</th>
@@ -113,7 +113,7 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
                             {mechanic.photo_url ? (
                               <img alt={mechanic.full_name} className="size-12 rounded-2xl object-cover" src={mechanic.photo_url} />
                             ) : (
-                              <div className="flex size-12 items-center justify-center rounded-2xl bg-[rgba(249,115,22,0.12)] text-[var(--primary-strong)]">
+                              <div className="flex size-12 items-center justify-center rounded-[16px] bg-[rgba(201,138,5,0.1)] text-[var(--primary-strong)]">
                                 <UserRound className="size-5" />
                               </div>
                             )}
@@ -155,14 +155,14 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
             {mechanics.map((mechanic) => (
-              <Card className="bg-white/86" key={mechanic.id}>
+              <Card className="bg-white/90" key={mechanic.id}>
                 <CardContent className="space-y-5 px-5 py-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-4">
                       {mechanic.photo_url ? (
-                        <img alt={mechanic.full_name} className="size-16 rounded-[20px] object-cover" src={mechanic.photo_url} />
+                        <img alt={mechanic.full_name} className="size-16 rounded-[18px] object-cover" src={mechanic.photo_url} />
                       ) : (
-                        <div className="flex size-16 items-center justify-center rounded-[20px] bg-[rgba(249,115,22,0.12)] text-[var(--primary-strong)]">
+                        <div className="flex size-16 items-center justify-center rounded-[18px] bg-[rgba(201,138,5,0.1)] text-[var(--primary-strong)]">
                           <UserRound className="size-7" />
                         </div>
                       )}
@@ -204,7 +204,7 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
                     {mechanic.currentOrders.length ? (
                       <div className="grid gap-2">
                         {mechanic.currentOrders.map((order) => (
-                          <div key={order.id} className="flex items-center justify-between rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-3">
+                          <div key={order.id} className="flex items-center justify-between rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-3">
                             <div>
                               <div className="text-sm font-medium">{order.title}</div>
                               <div className="text-xs text-[var(--muted)]">{order.vehicle_label || "Vehiculo pendiente"}</div>
@@ -214,7 +214,7 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
                         ))}
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[rgba(249,115,22,0.04)] p-4 text-sm text-[var(--muted)]">
+                      <div className="rounded-[18px] border border-dashed border-[var(--line)] bg-[rgba(201,138,5,0.05)] p-4 text-sm text-[var(--muted)]">
                         No tiene ordenes activas asignadas.
                       </div>
                     )}
@@ -225,7 +225,7 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
           </div>
         )
       ) : (
-        <Card className="bg-white/86">
+        <Card className="bg-white/90">
           <CardContent className="grid gap-4 p-6 sm:grid-cols-2">
             <div className="space-y-3">
               <Badge variant="primary">Equipo vacio</Badge>
@@ -245,7 +245,7 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
                 "La asignacion se conecta directo a ordenes de trabajo.",
                 "El rol deja la base lista para permisos y comisiones futuras.",
               ].map((item) => (
-                <div key={item} className="flex gap-3 rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 text-sm leading-6">
+                <div key={item} className="flex gap-3 rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4 text-sm leading-6">
                   <UsersRound className="mt-0.5 size-4 shrink-0 text-[var(--primary-strong)]" />
                   <span>{item}</span>
                 </div>
@@ -260,7 +260,7 @@ export default async function MechanicsPage({ searchParams }: MechanicsPageProps
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
+    <div className="rounded-[18px] border border-[var(--line)] bg-[#fbfaf7] p-4">
       <div className="text-sm text-[var(--muted)]">{label}</div>
       <div className="mt-2 font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">{value}</div>
     </div>
