@@ -13,7 +13,7 @@ alter table if exists public.workshop_members
     check (role in ('owner', 'admin', 'jefe_taller', 'recepcion', 'finanzas', 'mechanic'));
 
 drop index if exists idx_workshop_members_email;
-drop index if exists workshop_members_workshop_email_unique;
+-- drop index if exists workshop_members_workshop_email_unique;
 alter table if exists public.workshop_members
   drop constraint if exists workshop_members_workshop_email_unique;
 
