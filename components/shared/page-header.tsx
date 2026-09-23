@@ -30,7 +30,7 @@ export function PageHeader({ title, description, status, action }: PageHeaderPro
           <h1 className="font-[family-name:var(--font-heading)] text-2xl font-bold tracking-tight sm:text-3xl">
             {title}
           </h1>
-          <p className="max-w-3xl text-sm leading-6 text-white/78 sm:text-base">
+          <p className="hidden md:block max-w-3xl text-sm leading-6 text-white/78 sm:text-base">
             {description}
           </p>
         </div>
@@ -38,14 +38,14 @@ export function PageHeader({ title, description, status, action }: PageHeaderPro
       </div>
       {action ? (
         action.href ? (
-          <Button asChild variant="primary" className="w-full sm:w-auto">
+          <Button asChild variant="primary" className="w-full sm:w-auto hidden sm:flex">
             <Link href={action.href}>
               {action.icon}
               {action.label}
             </Link>
           </Button>
         ) : (
-          <Button variant="primary" className="w-full sm:w-auto">
+          <Button variant="primary" className="w-full sm:w-auto hidden sm:flex">
             {action.icon}
             {action.label}
           </Button>

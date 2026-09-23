@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "node --test --experimental-strip-types --experimental-test-module-mocks --import ./tests/register-typescript-paths.mjs tests/clients-access.test.ts tests/finances-access.test.ts tests/inventory-access.test.ts tests/marketplace-access.test.ts tests/permissions.test.ts tests/purchase-orders-access.test.ts tests/quotes-access.test.ts tests/quotes/schema.test.ts tests/suppliers-access.test.ts tests/vehicles-access.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

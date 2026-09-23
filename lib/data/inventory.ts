@@ -2,7 +2,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import {
   normalizeInventoryItemInput,
   type InventoryItemFormValues,
@@ -34,6 +34,29 @@ export type InventoryMovementRecord = {
   note: string | null;
   created_at: string;
 };
+
+export type InventoryInputErrorCode =
+  | "inventory_item_not_available"
+  | "inventory_items_not_available"
+  | "work_order_not_available"
+  | "workshop_mismatch";
+
+export class InventoryInputError extends Error {
+  readonly code: InventoryInputErrorCode;
+
+  constructor(code: InventoryInputErrorCode, message: string) {
+    super(message);
+    this.name = "InventoryInputError";
+    this.code = code;
+  }
+}
+
+class InventoryDataError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "InventoryDataError";
+  }
+}
 
 export type InventoryListItem = InventoryItemRecord & {
   quoteUsageCount: number;
@@ -99,7 +122,7 @@ async function insertInventoryMovement(
   });
 
   if (error) {
-    throw error;
+    throw new InventoryDataError("No se pudo registrar el movimiento de inventario.", error);
   }
 }
 
@@ -121,7 +144,7 @@ async function updateInventoryQuantities(
     .in("id", itemIds);
 
   if (error) {
-    throw error;
+    throw new InventoryDataError("No se pudo consultar el stock actual.", error);
   }
 
   const currentRows = ((data as Array<{ id: string; stock_quantity: number | string | null }> | null) ?? []).reduce<
@@ -130,6 +153,13 @@ async function updateInventoryQuantities(
     acc[item.id] = Number(item.stock_quantity ?? 0);
     return acc;
   }, {});
+
+  if (Object.keys(currentRows).length !== itemIds.length) {
+    throw new InventoryInputError(
+      "inventory_items_not_available",
+      "Uno o mas repuestos no estan disponibles.",
+    );
+  }
 
   for (const itemId of itemIds) {
     const nextQuantity = Number(((currentRows[itemId] ?? 0) + deltas[itemId]).toFixed(2));
@@ -143,13 +173,13 @@ async function updateInventoryQuantities(
       .eq("id", itemId);
 
     if (updateError) {
-      throw updateError;
+      throw new InventoryDataError("No se pudo actualizar el stock.", updateError);
     }
   }
 }
 
 export async function getInventoryPartOptions(): Promise<InventoryPartOption[]> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("inventory.view");
   const supabase = await createSupabaseDataClient();
 
   const { data, error } = await supabase
@@ -163,7 +193,7 @@ export async function getInventoryPartOptions(): Promise<InventoryPartOption[]> 
       return [];
     }
 
-    throw error;
+    throw new InventoryDataError("No se pudieron cargar los repuestos.", error);
   }
 
   return (((data as Array<{
@@ -198,7 +228,7 @@ export async function getInventoryPartOptions(): Promise<InventoryPartOption[]> 
 }
 
 export async function getInventoryList(search?: string): Promise<InventoryListItem[]> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("inventory.view");
   const supabase = await createSupabaseDataClient();
   const query = search?.trim() ?? "";
 
@@ -221,7 +251,7 @@ export async function getInventoryList(search?: string): Promise<InventoryListIt
       return [];
     }
 
-    throw error;
+    throw new InventoryDataError("No se pudo cargar el inventario.", error);
   }
 
   const items = ((data as Array<
@@ -256,7 +286,7 @@ export async function getInventoryList(search?: string): Promise<InventoryListIt
   );
 
   if (usageError) {
-    throw usageError;
+    throw new InventoryDataError("No se pudo cargar el uso del inventario.", usageError);
   }
 
   const quoteUsageCounts = (((quoteUsageResult.data as Array<{ inventory_item_id: string | null }> | null) ?? []).reduce<
@@ -286,7 +316,7 @@ export async function getInventoryList(search?: string): Promise<InventoryListIt
 }
 
 export async function getInventoryItem(itemId: string) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("inventory.view");
   const supabase = await createSupabaseDataClient();
 
   const { data, error } = await supabase
@@ -301,7 +331,7 @@ export async function getInventoryItem(itemId: string) {
       notFound();
     }
 
-    throw error;
+    throw new InventoryDataError("No se pudo cargar el repuesto.", error);
   }
 
   if (!data) {
@@ -324,21 +354,32 @@ export async function getInventoryItemForEdit(itemId: string) {
 }
 
 export async function upsertInventoryItem(values: InventoryItemFormValues, itemId?: string) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("inventory.manage");
   const supabase = await createSupabaseDataClient();
   const input = normalizeInventoryItemInput(values);
 
   let existingItem: Pick<InventoryItemRecord, "stock_quantity"> | null = null;
 
   if (itemId) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("inventory_items")
       .select("stock_quantity")
       .eq("workshop_id", workshop.id)
       .eq("id", itemId)
       .maybeSingle();
 
+    if (error) {
+      throw new InventoryDataError("No se pudo validar el repuesto.", error);
+    }
+
     existingItem = (data as Pick<InventoryItemRecord, "stock_quantity"> | null) ?? null;
+
+    if (!existingItem) {
+      throw new InventoryInputError(
+        "inventory_item_not_available",
+        "El repuesto seleccionado no esta disponible.",
+      );
+    }
   }
 
   const payload = {
@@ -361,7 +402,7 @@ export async function upsertInventoryItem(values: InventoryItemFormValues, itemI
   const { data, error } = await query.select("*").single();
 
   if (error) {
-    throw error;
+    throw new InventoryDataError("No se pudo guardar el repuesto.", error);
   }
 
   const item = normalizeInventoryItemRecord(data as Omit<
@@ -402,8 +443,58 @@ export async function syncWorkOrderInventoryUsage(params: {
   previousUsage: Record<string, number>;
   nextUsage: Record<string, number>;
 }) {
+  const { workshop } = await requireWorkshopOperation("inventory.sync_work_order_usage");
+
+  if (params.workshopId !== workshop.id) {
+    throw new InventoryInputError(
+      "workshop_mismatch",
+      "El taller de la operacion no esta disponible.",
+    );
+  }
+
   const supabase = await createSupabaseDataClient();
   const itemIds = Array.from(new Set([...Object.keys(params.previousUsage), ...Object.keys(params.nextUsage)]));
+
+  const { data: workOrderData, error: workOrderError } = await supabase
+    .from("work_orders")
+    .select("id")
+    .eq("workshop_id", workshop.id)
+    .eq("id", params.workOrderId)
+    .maybeSingle();
+
+  if (workOrderError) {
+    throw new InventoryDataError("No se pudo validar la orden del inventario.", workOrderError);
+  }
+
+  if (!workOrderData) {
+    throw new InventoryInputError(
+      "work_order_not_available",
+      "La orden vinculada no esta disponible.",
+    );
+  }
+
+  if (itemIds.length) {
+    const { data: inventoryItemsData, error: inventoryItemsError } = await supabase
+      .from("inventory_items")
+      .select("id")
+      .eq("workshop_id", workshop.id)
+      .in("id", itemIds);
+
+    if (inventoryItemsError) {
+      throw new InventoryDataError("No se pudieron validar los repuestos de la orden.", inventoryItemsError);
+    }
+
+    const availableItemIds = new Set(
+      ((inventoryItemsData as Array<{ id: string }> | null) ?? []).map((item) => item.id),
+    );
+
+    if (itemIds.some((itemId) => !availableItemIds.has(itemId))) {
+      throw new InventoryInputError(
+        "inventory_items_not_available",
+        "Uno o mas repuestos no estan disponibles.",
+      );
+    }
+  }
 
   const deltas = itemIds.reduce<Record<string, number>>((acc, itemId) => {
     const previous = params.previousUsage[itemId] ?? 0;
@@ -418,24 +509,24 @@ export async function syncWorkOrderInventoryUsage(params: {
   }, {});
 
   if (Object.keys(deltas).length) {
-    await updateInventoryQuantities(params.workshopId, deltas);
+    await updateInventoryQuantities(workshop.id, deltas);
   }
 
   const { error: deleteError } = await supabase
     .from("inventory_movements")
     .delete()
-    .eq("workshop_id", params.workshopId)
+    .eq("workshop_id", workshop.id)
     .eq("reference_type", "work_order")
     .eq("reference_id", params.workOrderId);
 
   if (deleteError) {
-    throw deleteError;
+    throw new InventoryDataError("No se pudieron actualizar los movimientos de inventario.", deleteError);
   }
 
   const movementRows = Object.entries(params.nextUsage)
     .filter(([, quantity]) => quantity > 0)
     .map(([inventoryItemId, quantity]) => ({
-      workshop_id: params.workshopId,
+      workshop_id: workshop.id,
       inventory_item_id: inventoryItemId,
       movement_type: "work_order_usage" as const,
       quantity_delta: Number((-quantity).toFixed(2)),
@@ -451,7 +542,7 @@ export async function syncWorkOrderInventoryUsage(params: {
   const { error: insertError } = await supabase.from("inventory_movements").insert(movementRows);
 
   if (insertError) {
-    throw insertError;
+    throw new InventoryDataError("No se pudieron registrar los movimientos de inventario.", insertError);
   }
 }
 

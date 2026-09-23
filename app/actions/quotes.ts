@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 
-import { updateQuoteLifecycle, upsertQuote } from "@/lib/data/quotes";
+import {
+  QuoteInputError,
+  updateQuoteLifecycle,
+  upsertQuote,
+} from "@/lib/data/quotes";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { quoteFormSchema, type QuoteFormValues } from "@/lib/quotes/schema";
 
 type SaveQuoteResult =
@@ -21,17 +26,18 @@ export async function saveQuoteAction(
   values: QuoteFormValues,
   quoteId?: string,
 ): Promise<SaveQuoteResult> {
-  const parsed = quoteFormSchema.safeParse(values);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      message: "Revisa el presupuesto antes de guardar.",
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
-  }
-
   try {
+    await requireWorkshopOperation("quotes.manage");
+    const parsed = quoteFormSchema.safeParse(values);
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: "Revisa el presupuesto antes de guardar.",
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
     const quote = await upsertQuote(parsed.data, quoteId);
 
     revalidatePath("/app/quotes");
@@ -49,7 +55,10 @@ export async function saveQuoteAction(
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "No se pudo guardar el presupuesto.",
+      message:
+        error instanceof QuoteInputError
+          ? error.message
+          : "No se pudo guardar el presupuesto.",
     };
   }
 }
@@ -59,6 +68,7 @@ export async function updateQuoteLifecycleAction(
   action: "archive" | "restore" | "delete",
 ): Promise<SaveQuoteResult> {
   try {
+    await requireWorkshopOperation("quotes.manage");
     const quote = await updateQuoteLifecycle(quoteId, action);
 
     revalidatePath("/app/quotes");
@@ -80,7 +90,10 @@ export async function updateQuoteLifecycleAction(
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "No se pudo actualizar el presupuesto.",
+      message:
+        error instanceof QuoteInputError
+          ? error.message
+          : "No se pudo actualizar el presupuesto.",
     };
   }
 }

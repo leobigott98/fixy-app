@@ -10,7 +10,14 @@ import {
 } from "@/lib/auth/session-utils";
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
 import { createSupabaseAdminClient, createSupabasePublicAuthClient } from "@/lib/supabase/admin";
-import type { WorkshopRole } from "@/lib/permissions";
+import {
+  assertWorkshopOperationAllowed,
+  WorkshopOperationDeniedError,
+  type WorkshopOperation,
+  type WorkshopOperationContext,
+  type WorkshopOperationSubject,
+  type WorkshopRole,
+} from "@/lib/permissions";
 import {
   buildOpeningHoursLabel,
   slugifyWorkshopPublicSlug,
@@ -661,7 +668,7 @@ export async function getCurrentWorkshopAccess(): Promise<CurrentWorkshopAccess 
 
   const acceptedInvite = membership ?? (await acceptWorkshopInviteForIdentifier(session.user.loginIdentifier));
 
-  if (!acceptedInvite) {
+  if (!acceptedInvite || !acceptedInvite.is_active) {
     return null;
   }
 
@@ -702,13 +709,35 @@ export async function getCurrentWorkshopRole() {
 }
 
 export async function requireCurrentWorkshop() {
-  const workshop = await getCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
 
-  if (!workshop) {
+  if (!access || (access.member !== null && !access.member.is_active)) {
     redirect("/app/onboarding" as Route);
   }
 
-  return workshop;
+  return access.workshop;
+}
+
+export async function requireWorkshopOperation(
+  operation: WorkshopOperation,
+  context: WorkshopOperationContext = {},
+): Promise<CurrentWorkshopAccess> {
+  const access = await getCurrentWorkshopAccess();
+  const subject: WorkshopOperationSubject | null = access
+    ? {
+        role: access.role,
+        isActive: access.member?.is_active ?? access.role === "owner",
+        mechanicId: access.member?.mechanic_id ?? null,
+      }
+    : null;
+
+  assertWorkshopOperationAllowed(subject, operation, context);
+
+  if (!access) {
+    throw new WorkshopOperationDeniedError(operation, "anonymous");
+  }
+
+  return access;
 }
 
 export async function upsertCurrentWorkshop(input: WorkshopProfileInput) {

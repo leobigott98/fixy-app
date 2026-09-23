@@ -2,7 +2,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
 import { buildVehicleLabel, type VehicleProfileInput } from "@/lib/vehicles/schema";
 
@@ -38,6 +38,8 @@ type ClientLite = {
   phone: string | null;
   whatsapp_phone: string | null;
 };
+
+type WorkshopClientLite = ClientLite & { workshop_id: string };
 
 type QuoteLiteRow = {
   id: string;
@@ -124,6 +126,44 @@ export type VehicleDetailData = {
   repairHistory: VehicleRepairHistoryEntry[];
 };
 
+export type VehicleInputErrorCode = "client_not_available" | "vehicle_not_available";
+
+export class VehicleInputError extends Error {
+  readonly code: VehicleInputErrorCode;
+
+  constructor(code: VehicleInputErrorCode) {
+    const messages: Record<VehicleInputErrorCode, string> = {
+      client_not_available: "El cliente seleccionado no esta disponible.",
+      vehicle_not_available: "El vehiculo seleccionado no esta disponible.",
+    };
+
+    super(messages[code]);
+    this.name = "VehicleInputError";
+    this.code = code;
+  }
+}
+
+class VehicleDataError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "VehicleDataError";
+  }
+}
+
+function toWorkshopOwner(
+  value: WorkshopClientLite | WorkshopClientLite[] | null,
+  workshopId: string,
+): ClientLite | null {
+  const relation = Array.isArray(value) ? value[0] ?? null : value;
+
+  if (relation?.workshop_id !== workshopId) {
+    return null;
+  }
+
+  const { workshop_id: _workshopId, ...owner } = relation;
+  return owner;
+}
+
 async function replaceVehiclePhotos(
   vehicleId: string,
   workshopId: string,
@@ -137,7 +177,7 @@ async function replaceVehiclePhotos(
     .eq("workshop_id", workshopId);
 
   if (deleteError && !isMissingRelationError(deleteError)) {
-    throw deleteError;
+    throw new VehicleDataError("No se pudieron actualizar las fotos del vehiculo.", deleteError);
   }
 
   if (!photoUrls.length) {
@@ -154,7 +194,7 @@ async function replaceVehiclePhotos(
   );
 
   if (error) {
-    throw error;
+    throw new VehicleDataError("No se pudieron guardar las fotos del vehiculo.", error);
   }
 }
 
@@ -168,7 +208,7 @@ function normalizeHistoryItem<T extends WorkOrderHistoryItemRow>(item: T) {
 }
 
 export async function getVehicleOwnerOptions() {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("vehicles.view");
   const supabase = await createSupabaseDataClient();
 
   const { data, error } = await supabase
@@ -182,7 +222,7 @@ export async function getVehicleOwnerOptions() {
       return [];
     }
 
-    throw error;
+    throw new VehicleDataError("No se pudieron cargar los clientes disponibles.", error);
   }
 
   return ((data as Array<{ id: string; full_name: string }> | null) ?? []).map((client) => ({
@@ -192,13 +232,13 @@ export async function getVehicleOwnerOptions() {
 }
 
 export async function getVehiclesList(search?: string): Promise<VehicleListItem[]> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("vehicles.view");
   const supabase = await createSupabaseDataClient();
   const query = search?.trim() ?? "";
 
   let vehiclesQuery = supabase
     .from("vehicles")
-    .select("*, clients(id,full_name,phone,whatsapp_phone)")
+    .select("*, clients(id,workshop_id,full_name,phone,whatsapp_phone)")
     .eq("workshop_id", workshop.id)
     .order("updated_at", { ascending: false });
 
@@ -221,15 +261,19 @@ export async function getVehiclesList(search?: string): Promise<VehicleListItem[
       return [];
     }
 
-    throw error;
+    throw new VehicleDataError("No se pudieron cargar los vehiculos.", error);
   }
 
   const vehicles = (((data as Array<
-    VehicleRecord & { clients: ClientLite | ClientLite[] | null }
-  > | null) ?? []).map((vehicle) => ({
-    ...vehicle,
-    owner: Array.isArray(vehicle.clients) ? vehicle.clients[0] ?? null : vehicle.clients,
-  }))) as Array<VehicleRecord & { owner: ClientLite | null }>;
+    VehicleRecord & { clients: WorkshopClientLite | WorkshopClientLite[] | null }
+  > | null) ?? []).map((vehicleRow) => {
+    const { clients, ...vehicle } = vehicleRow;
+
+    return {
+      ...vehicle,
+      owner: toWorkshopOwner(clients, workshop.id),
+    };
+  })) as Array<VehicleRecord & { owner: ClientLite | null }>;
 
   if (!vehicles.length) {
     return [];
@@ -255,7 +299,7 @@ export async function getVehiclesList(search?: string): Promise<VehicleListItem[
   );
 
   if (nonMissingError) {
-    throw nonMissingError;
+    throw new VehicleDataError("No se pudo cargar la actividad de los vehiculos.", nonMissingError);
   }
 
   const quoteCounts = (((quotesResult.data as Array<{ vehicle_id: string | null }> | null) ?? []).reduce<
@@ -284,12 +328,12 @@ export async function getVehiclesList(search?: string): Promise<VehicleListItem[
 }
 
 export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetailData> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("vehicles.view");
   const supabase = await createSupabaseDataClient();
 
   const { data: vehicleData, error: vehicleError } = await supabase
     .from("vehicles")
-    .select("*, clients(id,full_name,phone,whatsapp_phone)")
+    .select("*, clients(id,workshop_id,full_name,phone,whatsapp_phone)")
     .eq("workshop_id", workshop.id)
     .eq("id", vehicleId)
     .maybeSingle();
@@ -299,10 +343,12 @@ export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetail
       notFound();
     }
 
-    throw vehicleError;
+    throw new VehicleDataError("No se pudo cargar el vehiculo.", vehicleError);
   }
 
-  const vehicleRow = vehicleData as (VehicleRecord & { clients: ClientLite | ClientLite[] | null }) | null;
+  const vehicleRow = vehicleData as (VehicleRecord & {
+    clients: WorkshopClientLite | WorkshopClientLite[] | null;
+  }) | null;
 
   if (!vehicleRow) {
     notFound();
@@ -343,7 +389,7 @@ export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetail
   );
 
   if (nonMissingError) {
-    throw nonMissingError;
+    throw new VehicleDataError("No se pudo cargar el historial del vehiculo.", nonMissingError);
   }
 
   const repairHistoryOrders = ((repairHistoryOrdersResult.data as CompletedWorkOrderHistoryRow[] | null) ?? []).map(
@@ -384,7 +430,7 @@ export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetail
     );
 
     if (historyDetailError) {
-      throw historyDetailError;
+      throw new VehicleDataError("No se pudo cargar el detalle del historial del vehiculo.", historyDetailError);
     }
 
     const servicesByWorkOrder = (((servicesResult.data as WorkOrderHistoryItemRow[] | null) ?? []).reduce<
@@ -434,9 +480,11 @@ export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetail
     });
   }
 
+  const { clients, ...vehicle } = vehicleRow;
+
   return {
-    vehicle: vehicleRow,
-    owner: Array.isArray(vehicleRow.clients) ? vehicleRow.clients[0] ?? null : vehicleRow.clients,
+    vehicle,
+    owner: toWorkshopOwner(clients, workshop.id),
     quotes: (quotesResult.data as QuoteLiteRow[] | null) ?? [],
     workOrders: (workOrdersResult.data as WorkOrderLiteRow[] | null) ?? [],
     photos: (photosResult.data as VehiclePhotoRecord[] | null) ?? [],
@@ -449,8 +497,40 @@ export async function getVehicleForEdit(vehicleId: string) {
 }
 
 export async function upsertVehicle(input: VehicleProfileInput, vehicleId?: string) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("vehicles.manage");
   const supabase = await createSupabaseDataClient();
+
+  const { data: client, error: clientError } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("workshop_id", workshop.id)
+    .eq("id", input.clientId)
+    .maybeSingle();
+
+  if (clientError) {
+    throw new VehicleDataError("No se pudo validar el cliente.", clientError);
+  }
+
+  if (!client) {
+    throw new VehicleInputError("client_not_available");
+  }
+
+  if (vehicleId) {
+    const { data: existingVehicle, error: existingVehicleError } = await supabase
+      .from("vehicles")
+      .select("id")
+      .eq("workshop_id", workshop.id)
+      .eq("id", vehicleId)
+      .maybeSingle();
+
+    if (existingVehicleError) {
+      throw new VehicleDataError("No se pudo validar el vehiculo.", existingVehicleError);
+    }
+
+    if (!existingVehicle) {
+      throw new VehicleInputError("vehicle_not_available");
+    }
+  }
 
   const payload = {
     workshop_id: workshop.id,
@@ -473,7 +553,7 @@ export async function upsertVehicle(input: VehicleProfileInput, vehicleId?: stri
   const { data, error } = await query.select("*").single();
 
   if (error) {
-    throw error;
+    throw new VehicleDataError("No se pudo guardar el vehiculo.", error);
   }
 
   const vehicle = data as VehicleRecord;

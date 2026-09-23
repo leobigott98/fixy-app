@@ -122,7 +122,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Dashboard de ${workshop.workshop_name}`}
+        title={`${workshop.workshop_name}`}
         description={`Operacion del taller en ${workshop.city}. Horario: ${workshop.opening_hours_label}.`}
         status="BI operativo"
         action={{
@@ -132,13 +132,13 @@ export default async function DashboardPage() {
         }}
       />
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
         {quickActions.map((action) => (
           <WorkshopActionTile key={action.title} {...action} />
         ))}
       </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+<hr></hr>
+      <div className="grid gap-4 grid-cols-2 xl:grid-cols-6">
         <KpiCard
           helper="Trabajos abiertos o listos para entrega."
           label="Ordenes activas"
@@ -176,14 +176,14 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr] grid-cols-1">
         <LineChartCard
           data={stats.analytics.cashflowTrend}
           description="Lectura mensual de caja: cuanto cobraste y cuanto salio del taller."
           title="Tendencia de caja"
         />
 
-        <Card className="mesh-panel subtle-grid text-white">
+        <Card className="mesh-panel subtle-grid text-white hidden md:block">
           <CardHeader>
             <Badge variant="dark">Taller</Badge>
             <CardTitle className="text-white">Resumen ejecutivo</CardTitle>
@@ -522,7 +522,7 @@ function WorkshopActionTile({
     <Link
       href={href}
       className={[
-        "group flex min-h-[168px] flex-col justify-between rounded-[22px] border p-5 shadow-[0_16px_34px_rgba(7,31,39,0.08)]",
+        "group flex min-h-[168px] flex-col justify-between rounded-[22px] border p-5 shadow-[0_16px_34px_rgba(7,31,39,0.2)] transition hover:shadow-[0_16px_34px_rgba(7,31,39,0.3)] hover:-translate-y-0.5",
         isDark
           ? "border-white/10 bg-[var(--surface-dark)] text-white"
           : isGold
@@ -533,15 +533,15 @@ function WorkshopActionTile({
       <div>
         <div
           className={[
-            "flex size-12 items-center justify-center rounded-[16px]",
+            "flex md:size-12 size-8 items-center justify-center rounded-[16px]",
             isDark || isGold
               ? "bg-white/10 text-white"
               : "bg-[rgba(201,138,5,0.1)] text-[var(--primary-strong)]",
           ].join(" ")}
         >
-          <Icon className="size-5" />
+          <Icon className="size-4 md:size-5" />
         </div>
-        <div className="mt-5 font-[family-name:var(--font-heading)] text-xl font-bold">{title}</div>
+        <div className="md:mt-5 mt-3 font-[family-name:var(--font-heading)] text-xl font-bold">{title}</div>
         <p className={["mt-2 text-sm leading-6", isDark || isGold ? "text-white/78" : "text-[var(--muted)]"].join(" ")}>
           {description}
         </p>

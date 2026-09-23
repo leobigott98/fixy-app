@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { upsertSupplier } from "@/lib/data/suppliers";
+import { SupplierInputError, upsertSupplier } from "@/lib/data/suppliers";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { supplierFormSchema, type SupplierFormValues } from "@/lib/suppliers/schema";
 
 type SaveSupplierResult =
@@ -21,17 +22,18 @@ export async function saveSupplierAction(
   values: SupplierFormValues,
   supplierId?: string,
 ): Promise<SaveSupplierResult> {
-  const parsed = supplierFormSchema.safeParse(values);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      message: "Revisa los datos del proveedor.",
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
-  }
-
   try {
+    await requireWorkshopOperation("suppliers.manage");
+    const parsed = supplierFormSchema.safeParse(values);
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: "Revisa los datos del proveedor.",
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
     const supplier = await upsertSupplier(parsed.data, supplierId);
 
     revalidatePath("/app/suppliers");
@@ -46,7 +48,10 @@ export async function saveSupplierAction(
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "No se pudo guardar el proveedor.",
+      message:
+        error instanceof SupplierInputError
+          ? error.message
+          : "No se pudo guardar el proveedor.",
     };
   }
 }

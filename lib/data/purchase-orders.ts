@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
 import { getInventoryPartOptions } from "@/lib/data/inventory";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { getPurchaseOrderStatusLabel } from "@/lib/purchase-orders/constants";
 import {
   normalizePurchaseOrderInput,
@@ -14,6 +14,7 @@ import {
 
 type SupplierLite = {
   id: string;
+  workshop_id: string;
   name: string;
   phone: string | null;
 };
@@ -73,8 +74,44 @@ export type PurchaseOrderFormOptions = {
   }>;
 };
 
+export type PurchaseOrderInputErrorCode =
+  | "supplier_not_available"
+  | "purchase_order_not_available"
+  | "inventory_items_not_available";
+
+export class PurchaseOrderInputError extends Error {
+  readonly code: PurchaseOrderInputErrorCode;
+
+  constructor(code: PurchaseOrderInputErrorCode) {
+    const messages: Record<PurchaseOrderInputErrorCode, string> = {
+      supplier_not_available: "El proveedor seleccionado no esta disponible.",
+      purchase_order_not_available: "La orden de compra seleccionada no esta disponible.",
+      inventory_items_not_available: "Uno o mas repuestos no estan disponibles.",
+    };
+
+    super(messages[code]);
+    this.name = "PurchaseOrderInputError";
+    this.code = code;
+  }
+}
+
+class PurchaseOrderDataError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "PurchaseOrderDataError";
+  }
+}
+
 function toSingleRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function toWorkshopRelation<T extends { workshop_id: string }>(
+  value: T | T[] | null,
+  workshopId: string,
+): T | null {
+  const relation = toSingleRelation(value);
+  return relation?.workshop_id === workshopId ? relation : null;
 }
 
 function buildPurchaseOrderCode() {
@@ -122,30 +159,55 @@ function formatPurchaseOrderItemsForInsert(
   }));
 }
 
-async function validatePurchaseOrderRelations(input: PurchaseOrderInput) {
-  const workshop = await requireCurrentWorkshop();
+async function validatePurchaseOrderRelations(input: PurchaseOrderInput, workshopId: string) {
   const supabase = await createSupabaseDataClient();
 
-  const { data, error } = await supabase
+  const { data: supplier, error: supplierError } = await supabase
     .from("suppliers")
     .select("id")
-    .eq("workshop_id", workshop.id)
+    .eq("workshop_id", workshopId)
     .eq("id", input.supplierId)
     .maybeSingle();
 
-  if (error) {
-    throw error;
+  if (supplierError) {
+    throw new PurchaseOrderDataError("No se pudo validar el proveedor.", supplierError);
   }
 
-  if (!data) {
-    throw new Error("Selecciona un proveedor valido.");
+  if (!supplier) {
+    throw new PurchaseOrderInputError("supplier_not_available");
   }
 
-  return { workshop };
+  const inventoryItemIds = [...new Set(
+    input.items
+      .map((item) => item.inventoryItemId)
+      .filter((itemId): itemId is string => Boolean(itemId)),
+  )];
+
+  if (inventoryItemIds.length) {
+    const { data: inventoryItems, error: inventoryItemsError } = await supabase
+      .from("inventory_items")
+      .select("id")
+      .eq("workshop_id", workshopId)
+      .in("id", inventoryItemIds);
+
+    if (inventoryItemsError) {
+      throw new PurchaseOrderDataError("No se pudieron validar los repuestos.", inventoryItemsError);
+    }
+
+    const availableItemIds = new Set(
+      ((inventoryItems as Array<{ id: string }> | null) ?? []).map((item) => item.id),
+    );
+
+    if (inventoryItemIds.some((itemId) => !availableItemIds.has(itemId))) {
+      throw new PurchaseOrderInputError("inventory_items_not_available");
+    }
+  }
+
+  return supabase;
 }
 
 export async function getPurchaseOrderFormOptions(): Promise<PurchaseOrderFormOptions> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("purchase_orders.view");
   const supabase = await createSupabaseDataClient();
 
   const [suppliersResult, inventoryItems] = await Promise.all([
@@ -154,7 +216,7 @@ export async function getPurchaseOrderFormOptions(): Promise<PurchaseOrderFormOp
   ]);
 
   if (suppliersResult.error && !isMissingRelationError(suppliersResult.error)) {
-    throw suppliersResult.error;
+    throw new PurchaseOrderDataError("No se pudieron cargar las opciones de compra.", suppliersResult.error);
   }
 
   return {
@@ -172,13 +234,13 @@ export async function getPurchaseOrderFormOptions(): Promise<PurchaseOrderFormOp
 }
 
 export async function getPurchaseOrdersList(search?: string): Promise<PurchaseOrderListItem[]> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("purchase_orders.view");
   const supabase = await createSupabaseDataClient();
   const query = search?.trim().toLowerCase() ?? "";
 
   const { data, error } = await supabase
     .from("purchase_orders")
-    .select("*, suppliers(id,name,phone)")
+    .select("*, suppliers(id,workshop_id,name,phone)")
     .eq("workshop_id", workshop.id)
     .order("ordered_at", { ascending: false });
 
@@ -187,13 +249,13 @@ export async function getPurchaseOrdersList(search?: string): Promise<PurchaseOr
       return [];
     }
 
-    throw error;
+    throw new PurchaseOrderDataError("No se pudieron cargar las ordenes de compra.", error);
   }
 
   const rows = ((data as PurchaseOrderRowWithRelations[] | null) ?? [])
     .map((row) => ({
       ...normalizePurchaseOrderRecord(row),
-      supplier: toSingleRelation(row.suppliers),
+      supplier: toWorkshopRelation(row.suppliers, workshop.id),
     }))
     .filter((order) => {
       if (!query) {
@@ -224,7 +286,7 @@ export async function getPurchaseOrdersList(search?: string): Promise<PurchaseOr
     .in("purchase_order_id", orderIds);
 
   if (itemsError && !isMissingRelationError(itemsError)) {
-    throw itemsError;
+    throw new PurchaseOrderDataError("No se pudo cargar el detalle de las ordenes de compra.", itemsError);
   }
 
   const itemCounts = (((itemsData as Array<{ purchase_order_id: string }> | null) ?? []).reduce<Record<string, number>>(
@@ -242,12 +304,12 @@ export async function getPurchaseOrdersList(search?: string): Promise<PurchaseOr
 }
 
 export async function getPurchaseOrderDetail(purchaseOrderId: string): Promise<PurchaseOrderDetailData> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("purchase_orders.view");
   const supabase = await createSupabaseDataClient();
 
   const { data: orderData, error: orderError } = await supabase
     .from("purchase_orders")
-    .select("*, suppliers(id,name,phone)")
+    .select("*, suppliers(id,workshop_id,name,phone)")
     .eq("workshop_id", workshop.id)
     .eq("id", purchaseOrderId)
     .maybeSingle();
@@ -257,7 +319,7 @@ export async function getPurchaseOrderDetail(purchaseOrderId: string): Promise<P
       notFound();
     }
 
-    throw orderError;
+    throw new PurchaseOrderDataError("No se pudo cargar la orden de compra.", orderError);
   }
 
   const order = orderData as PurchaseOrderRowWithRelations | null;
@@ -274,12 +336,12 @@ export async function getPurchaseOrderDetail(purchaseOrderId: string): Promise<P
     .order("sort_order");
 
   if (itemsError && !isMissingRelationError(itemsError)) {
-    throw itemsError;
+    throw new PurchaseOrderDataError("No se pudieron cargar los items de la orden de compra.", itemsError);
   }
 
   return {
     purchaseOrder: normalizePurchaseOrderRecord(order),
-    supplier: toSingleRelation(order.suppliers),
+    supplier: toWorkshopRelation(order.suppliers, workshop.id),
     items: ((itemsData as Array<
       Omit<PurchaseOrderItemRecord, "quantity" | "unit_cost" | "line_total"> & {
         quantity: number | string | null;
@@ -295,21 +357,29 @@ export async function getPurchaseOrderForEdit(purchaseOrderId: string) {
 }
 
 export async function upsertPurchaseOrder(values: PurchaseOrderFormValues, purchaseOrderId?: string) {
+  const { workshop } = await requireWorkshopOperation("purchase_orders.manage");
   const input = normalizePurchaseOrderInput(values);
-  const { workshop } = await validatePurchaseOrderRelations(input);
-  const supabase = await createSupabaseDataClient();
+  const supabase = await validatePurchaseOrderRelations(input, workshop.id);
 
   let existingCode: string | null = null;
 
   if (purchaseOrderId) {
-    const { data } = await supabase
+    const { data: existingPurchaseOrder, error: existingPurchaseOrderError } = await supabase
       .from("purchase_orders")
       .select("code")
       .eq("workshop_id", workshop.id)
       .eq("id", purchaseOrderId)
       .maybeSingle();
 
-    existingCode = (data as { code: string | null } | null)?.code ?? null;
+    if (existingPurchaseOrderError) {
+      throw new PurchaseOrderDataError("No se pudo validar la orden de compra.", existingPurchaseOrderError);
+    }
+
+    if (!existingPurchaseOrder) {
+      throw new PurchaseOrderInputError("purchase_order_not_available");
+    }
+
+    existingCode = (existingPurchaseOrder as { code: string | null }).code;
   }
 
   const payload = {
@@ -329,7 +399,7 @@ export async function upsertPurchaseOrder(values: PurchaseOrderFormValues, purch
   const { data, error } = await query.select("*").single();
 
   if (error) {
-    throw error;
+    throw new PurchaseOrderDataError("No se pudo guardar la orden de compra.", error);
   }
 
   const purchaseOrder = normalizePurchaseOrderRecord(data as Omit<PurchaseOrderRecord, "total_amount"> & {
@@ -344,7 +414,7 @@ export async function upsertPurchaseOrder(values: PurchaseOrderFormValues, purch
       .eq("workshop_id", workshop.id);
 
     if (deleteError && !isMissingRelationError(deleteError)) {
-      throw deleteError;
+      throw new PurchaseOrderDataError("No se pudieron actualizar los items de la orden de compra.", deleteError);
     }
   }
 
@@ -354,7 +424,7 @@ export async function upsertPurchaseOrder(values: PurchaseOrderFormValues, purch
     const { error: itemsError } = await supabase.from("purchase_order_items").insert(itemsPayload);
 
     if (itemsError) {
-      throw itemsError;
+      throw new PurchaseOrderDataError("No se pudieron guardar los items de la orden de compra.", itemsError);
     }
   }
 

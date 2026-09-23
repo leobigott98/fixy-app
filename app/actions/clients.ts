@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { upsertClient } from "@/lib/data/clients";
+import { ClientInputError, upsertClient } from "@/lib/data/clients";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { clientProfileSchema, type ClientProfileInput } from "@/lib/clients/schema";
 
 type SaveClientResult =
@@ -21,17 +22,18 @@ export async function saveClientAction(
   values: ClientProfileInput,
   clientId?: string,
 ): Promise<SaveClientResult> {
-  const parsed = clientProfileSchema.safeParse(values);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      message: "Revisa los datos del cliente.",
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
-  }
-
   try {
+    await requireWorkshopOperation("clients.manage");
+    const parsed = clientProfileSchema.safeParse(values);
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: "Revisa los datos del cliente.",
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
     const client = await upsertClient(parsed.data, clientId);
 
     revalidatePath("/app/clients");
@@ -46,7 +48,10 @@ export async function saveClientAction(
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "No se pudo guardar el cliente.",
+      message:
+        error instanceof ClientInputError
+          ? error.message
+          : "No se pudo guardar el cliente.",
     };
   }
 }

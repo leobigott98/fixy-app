@@ -2,7 +2,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import type { SupplierFormValues } from "@/lib/suppliers/schema";
 
 export type SupplierRecord = {
@@ -19,8 +19,24 @@ export type SupplierListItem = SupplierRecord & {
   purchaseOrderCount: number;
 };
 
+export class SupplierInputError extends Error {
+  readonly code = "supplier_not_available";
+
+  constructor() {
+    super("El proveedor seleccionado no esta disponible.");
+    this.name = "SupplierInputError";
+  }
+}
+
+class SupplierDataError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "SupplierDataError";
+  }
+}
+
 export async function getSuppliersList(search?: string): Promise<SupplierListItem[]> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("suppliers.view");
   const supabase = await createSupabaseDataClient();
   const query = search?.trim() ?? "";
 
@@ -41,7 +57,7 @@ export async function getSuppliersList(search?: string): Promise<SupplierListIte
       return [];
     }
 
-    throw error;
+    throw new SupplierDataError("No se pudieron cargar los proveedores.", error);
   }
 
   const suppliers = (data as SupplierRecord[] | null) ?? [];
@@ -58,7 +74,7 @@ export async function getSuppliersList(search?: string): Promise<SupplierListIte
     .in("supplier_id", supplierIds);
 
   if (purchaseOrdersError && !isMissingRelationError(purchaseOrdersError)) {
-    throw purchaseOrdersError;
+    throw new SupplierDataError("No se pudo cargar el uso de los proveedores.", purchaseOrdersError);
   }
 
   const counts = (((purchaseOrdersData as Array<{ supplier_id: string | null }> | null) ?? []).reduce<Record<string, number>>(
@@ -78,7 +94,7 @@ export async function getSuppliersList(search?: string): Promise<SupplierListIte
 }
 
 export async function getSupplierForEdit(supplierId: string) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("suppliers.view");
   const supabase = await createSupabaseDataClient();
 
   const { data, error } = await supabase
@@ -93,7 +109,7 @@ export async function getSupplierForEdit(supplierId: string) {
       notFound();
     }
 
-    throw error;
+    throw new SupplierDataError("No se pudo cargar el proveedor.", error);
   }
 
   if (!data) {
@@ -104,8 +120,25 @@ export async function getSupplierForEdit(supplierId: string) {
 }
 
 export async function upsertSupplier(values: SupplierFormValues, supplierId?: string) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("suppliers.manage");
   const supabase = await createSupabaseDataClient();
+
+  if (supplierId) {
+    const { data: existingSupplier, error: existingSupplierError } = await supabase
+      .from("suppliers")
+      .select("id")
+      .eq("workshop_id", workshop.id)
+      .eq("id", supplierId)
+      .maybeSingle();
+
+    if (existingSupplierError) {
+      throw new SupplierDataError("No se pudo validar el proveedor.", existingSupplierError);
+    }
+
+    if (!existingSupplier) {
+      throw new SupplierInputError();
+    }
+  }
 
   const payload = {
     workshop_id: workshop.id,
@@ -121,7 +154,7 @@ export async function upsertSupplier(values: SupplierFormValues, supplierId?: st
   const { data, error } = await query.select("*").single();
 
   if (error) {
-    throw error;
+    throw new SupplierDataError("No se pudo guardar el proveedor.", error);
   }
 
   return data as SupplierRecord;

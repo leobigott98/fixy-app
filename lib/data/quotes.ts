@@ -2,8 +2,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { getInventoryPartOptions } from "@/lib/data/inventory";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { buildPublicQuoteDocumentPath, buildPublicQuotePath } from "@/lib/share-links";
 import {
   normalizeQuoteInput,
@@ -98,10 +97,43 @@ export type QuoteFormOptions = {
   }>;
 };
 
+type WorkshopClientLite = ClientLite & { workshop_id: string };
+type WorkshopVehicleLite = VehicleLite & { workshop_id: string };
+
 type QuoteRowWithRelations = QuoteRecord & {
-  clients: ClientLite | ClientLite[] | null;
-  vehicles: VehicleLite | VehicleLite[] | null;
+  clients: WorkshopClientLite | WorkshopClientLite[] | null;
+  vehicles: WorkshopVehicleLite | WorkshopVehicleLite[] | null;
 };
+
+export type QuoteInputErrorCode =
+  | "client_not_available"
+  | "vehicle_not_available"
+  | "inventory_items_not_available"
+  | "quote_not_available";
+
+export class QuoteInputError extends Error {
+  readonly code: QuoteInputErrorCode;
+
+  constructor(code: QuoteInputErrorCode) {
+    const messages: Record<QuoteInputErrorCode, string> = {
+      client_not_available: "El cliente seleccionado no esta disponible.",
+      vehicle_not_available: "El vehiculo seleccionado no esta disponible para ese cliente.",
+      inventory_items_not_available: "Uno o mas repuestos no estan disponibles.",
+      quote_not_available: "El presupuesto seleccionado no esta disponible.",
+    };
+
+    super(messages[code]);
+    this.name = "QuoteInputError";
+    this.code = code;
+  }
+}
+
+class QuoteDataError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "QuoteDataError";
+  }
+}
 
 function buildQuoteTitle(vehicle: VehicleLite | null) {
   if (!vehicle) {
@@ -113,6 +145,30 @@ function buildQuoteTitle(vehicle: VehicleLite | null) {
 
 function toSingleRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function toWorkshopRelation<T extends { workshop_id: string }>(
+  value: T | T[] | null,
+  workshopId: string,
+): Omit<T, "workshop_id"> | null {
+  const relation = toSingleRelation(value);
+
+  if (relation?.workshop_id !== workshopId) {
+    return null;
+  }
+
+  const { workshop_id: _workshopId, ...scopedRelation } = relation;
+  return scopedRelation;
+}
+
+function buildQuoteInventoryOptionLabel(item: {
+  name: string;
+  sku: string | null;
+  stockQuantity: number;
+}) {
+  return [item.name, item.sku ? `SKU ${item.sku}` : null, `Stock ${item.stockQuantity}`]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function normalizeQuoteRecord(record: QuoteRecord) {
@@ -152,10 +208,10 @@ export function getQuoteStatusVariant(status: QuoteRecord["status"]) {
 }
 
 export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("quotes.view");
   const supabase = await createSupabaseDataClient();
 
-  const [clientsResult, vehiclesResult, inventoryItems] = await Promise.all([
+  const [clientsResult, vehiclesResult, inventoryItemsResult] = await Promise.all([
     supabase
       .from("clients")
       .select("id,full_name,whatsapp_phone")
@@ -166,16 +222,42 @@ export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
       .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
       .eq("workshop_id", workshop.id)
       .order("updated_at", { ascending: false }),
-    getInventoryPartOptions(),
+    supabase
+      .from("inventory_items")
+      .select("id,name,sku,stock_quantity,reference_sale_price")
+      .eq("workshop_id", workshop.id)
+      .order("name", { ascending: true }),
   ]);
 
-  const nonMissingError = [clientsResult.error, vehiclesResult.error].find(
+  const nonMissingError = [clientsResult.error, vehiclesResult.error, inventoryItemsResult.error].find(
     (error) => error && !isMissingRelationError(error),
   );
 
   if (nonMissingError) {
-    throw nonMissingError;
+    throw new QuoteDataError("No se pudieron cargar las opciones del presupuesto.", nonMissingError);
   }
+
+  const inventoryItems = ((inventoryItemsResult.data as Array<{
+    id: string;
+    name: string;
+    sku: string | null;
+    stock_quantity: number | string | null;
+    reference_sale_price: number | string | null;
+  }> | null) ?? []).map((item) => {
+    const stockQuantity = Number(item.stock_quantity ?? 0);
+
+    return {
+      id: item.id,
+      name: item.name,
+      stockQuantity,
+      referenceSalePrice: Number(item.reference_sale_price ?? 0),
+      label: buildQuoteInventoryOptionLabel({
+        name: item.name,
+        sku: item.sku,
+        stockQuantity,
+      }),
+    };
+  });
 
   return {
     clients: (((clientsResult.data as Array<{ id: string; full_name: string; whatsapp_phone: string | null }> | null) ?? []).map(
@@ -192,24 +274,18 @@ export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
         vehicle.vehicle_label ??
         [vehicle.make, vehicle.model, vehicle.vehicle_year, vehicle.plate].filter(Boolean).join(" "),
     }))),
-    inventoryItems: inventoryItems.map((item) => ({
-      id: item.id,
-      label: item.label,
-      name: item.name,
-      stockQuantity: item.stockQuantity,
-      referenceSalePrice: item.referenceSalePrice,
-    })),
+    inventoryItems,
   };
 }
 
 export async function getQuotesList(search?: string, view: "active" | "archived" = "active"): Promise<QuoteListItem[]> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("quotes.view");
   const supabase = await createSupabaseDataClient();
   const query = search?.trim() ?? "";
 
   let quotesQuery = supabase
     .from("quotes")
-    .select("*, clients(id,full_name,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year)")
+    .select("*, clients(id,workshop_id,full_name,whatsapp_phone), vehicles(id,workshop_id,client_id,vehicle_label,plate,make,model,vehicle_year)")
     .eq("workshop_id", workshop.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
@@ -224,7 +300,7 @@ export async function getQuotesList(search?: string, view: "active" | "archived"
       return [];
     }
 
-    throw error;
+    throw new QuoteDataError("No se pudieron cargar los presupuestos.", error);
   }
 
   const rows = ((data as QuoteRowWithRelations[] | null) ?? []).filter((quote) => {
@@ -232,8 +308,8 @@ export async function getQuotesList(search?: string, view: "active" | "archived"
       return true;
     }
 
-    const client = toSingleRelation(quote.clients);
-    const vehicle = toSingleRelation(quote.vehicles);
+    const client = toWorkshopRelation(quote.clients, workshop.id);
+    const vehicle = toWorkshopRelation(quote.vehicles, workshop.id);
     const haystack = [
       quote.title,
       quote.notes ?? "",
@@ -261,7 +337,7 @@ export async function getQuotesList(search?: string, view: "active" | "archived"
     .in("quote_id", quoteIds);
 
   if (itemsError && !isMissingRelationError(itemsError)) {
-    throw itemsError;
+    throw new QuoteDataError("No se pudo cargar el detalle de los presupuestos.", itemsError);
   }
 
   const itemCounts = (((itemsData as Array<{ quote_id: string }> | null) ?? []).reduce<Record<string, number>>(
@@ -274,19 +350,19 @@ export async function getQuotesList(search?: string, view: "active" | "archived"
 
   return rows.map((quote) => ({
     ...normalizeQuoteRecord(quote),
-    client: toSingleRelation(quote.clients),
-    vehicle: toSingleRelation(quote.vehicles),
+    client: toWorkshopRelation(quote.clients, workshop.id),
+    vehicle: toWorkshopRelation(quote.vehicles, workshop.id),
     itemCount: itemCounts[quote.id] ?? 0,
   }));
 }
 
 export async function getQuoteDetail(quoteId: string): Promise<QuoteDetailData> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("quotes.view");
   const supabase = await createSupabaseDataClient();
 
   const { data: quoteData, error: quoteError } = await supabase
     .from("quotes")
-    .select("*, clients(id,full_name,whatsapp_phone), vehicles(id,client_id,vehicle_label,plate,make,model,vehicle_year)")
+    .select("*, clients(id,workshop_id,full_name,whatsapp_phone), vehicles(id,workshop_id,client_id,vehicle_label,plate,make,model,vehicle_year)")
     .eq("workshop_id", workshop.id)
     .eq("id", quoteId)
     .maybeSingle();
@@ -296,7 +372,7 @@ export async function getQuoteDetail(quoteId: string): Promise<QuoteDetailData> 
       notFound();
     }
 
-    throw quoteError;
+    throw new QuoteDataError("No se pudo cargar el presupuesto.", quoteError);
   }
 
   const quote = quoteData as QuoteRowWithRelations | null;
@@ -314,7 +390,7 @@ export async function getQuoteDetail(quoteId: string): Promise<QuoteDetailData> 
 
   if (itemsError) {
     if (!isMissingRelationError(itemsError)) {
-      throw itemsError;
+      throw new QuoteDataError("No se pudieron cargar los items del presupuesto.", itemsError);
     }
   }
 
@@ -327,8 +403,8 @@ export async function getQuoteDetail(quoteId: string): Promise<QuoteDetailData> 
 
   return {
     quote: normalizeQuoteRecord(quote),
-    client: toSingleRelation(quote.clients),
-    vehicle: toSingleRelation(quote.vehicles),
+    client: toWorkshopRelation(quote.clients, workshop.id),
+    vehicle: toWorkshopRelation(quote.vehicles, workshop.id),
     laborItems: items.filter((item) => item.item_type === "labor"),
     partItems: items.filter((item) => item.item_type === "part"),
   };
@@ -354,33 +430,76 @@ function formatQuoteItemsForInsert(quoteId: string, workshopId: string, items: Q
   }));
 }
 
-async function validateQuoteRelations(input: QuoteInput) {
-  const workshop = await requireCurrentWorkshop();
+async function validateQuoteRelations(input: QuoteInput, workshopId: string) {
   const supabase = await createSupabaseDataClient();
+
+  const { data: clientData, error: clientError } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("workshop_id", workshopId)
+    .eq("id", input.clientId)
+    .maybeSingle();
+
+  if (clientError) {
+    throw new QuoteDataError("No se pudo validar el cliente.", clientError);
+  }
+
+  if (!clientData) {
+    throw new QuoteInputError("client_not_available");
+  }
 
   const { data: vehicleData, error: vehicleError } = await supabase
     .from("vehicles")
-    .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
-    .eq("workshop_id", workshop.id)
+    .select("id,workshop_id,client_id,vehicle_label,plate,make,model,vehicle_year")
+    .eq("workshop_id", workshopId)
     .eq("id", input.vehicleId)
     .maybeSingle();
 
   if (vehicleError) {
-    throw vehicleError;
+    throw new QuoteDataError("No se pudo validar el vehiculo.", vehicleError);
   }
 
-  const vehicle = (vehicleData as VehicleLite | null) ?? null;
+  const vehicle = toWorkshopRelation(
+    (vehicleData as WorkshopVehicleLite | null) ?? null,
+    workshopId,
+  );
 
   if (!vehicle) {
-    throw new Error("Selecciona un vehiculo valido.");
+    throw new QuoteInputError("vehicle_not_available");
   }
 
   if (vehicle.client_id !== input.clientId) {
-    throw new Error("El vehiculo seleccionado no pertenece al cliente.");
+    throw new QuoteInputError("vehicle_not_available");
+  }
+
+  const inventoryItemIds = [...new Set(
+    input.partItems
+      .map((item) => item.inventoryItemId)
+      .filter((itemId): itemId is string => Boolean(itemId)),
+  )];
+
+  if (inventoryItemIds.length) {
+    const { data: inventoryItems, error: inventoryItemsError } = await supabase
+      .from("inventory_items")
+      .select("id")
+      .eq("workshop_id", workshopId)
+      .in("id", inventoryItemIds);
+
+    if (inventoryItemsError) {
+      throw new QuoteDataError("No se pudieron validar los repuestos.", inventoryItemsError);
+    }
+
+    const availableItemIds = new Set(
+      ((inventoryItems as Array<{ id: string }> | null) ?? []).map((item) => item.id),
+    );
+
+    if (inventoryItemIds.some((itemId) => !availableItemIds.has(itemId))) {
+      throw new QuoteInputError("inventory_items_not_available");
+    }
   }
 
   return {
-    workshop,
+    supabase,
     vehicle,
   };
 }
@@ -402,21 +521,29 @@ function buildQuoteTimestamps(status: QuoteRecord["status"], existing?: Pick<Quo
 }
 
 export async function upsertQuote(inputValues: QuoteFormValues, quoteId?: string) {
+  const { workshop } = await requireWorkshopOperation("quotes.manage");
   const input = normalizeQuoteInput(inputValues);
-  const { workshop, vehicle } = await validateQuoteRelations(input);
-  const supabase = await createSupabaseDataClient();
+  const { supabase, vehicle } = await validateQuoteRelations(input, workshop.id);
 
   let existingQuote: Pick<QuoteRecord, "sent_at" | "approved_at"> | null = null;
 
   if (quoteId) {
-    const { data } = await supabase
+    const { data, error: existingQuoteError } = await supabase
       .from("quotes")
       .select("sent_at,approved_at")
       .eq("workshop_id", workshop.id)
       .eq("id", quoteId)
       .maybeSingle();
 
+    if (existingQuoteError) {
+      throw new QuoteDataError("No se pudo validar el presupuesto.", existingQuoteError);
+    }
+
     existingQuote = (data as Pick<QuoteRecord, "sent_at" | "approved_at"> | null) ?? null;
+
+    if (!existingQuote) {
+      throw new QuoteInputError("quote_not_available");
+    }
   }
 
   const timestamps = buildQuoteTimestamps(input.status, existingQuote);
@@ -442,7 +569,7 @@ export async function upsertQuote(inputValues: QuoteFormValues, quoteId?: string
   const { data, error } = await query.select("*").single();
 
   if (error) {
-    throw error;
+    throw new QuoteDataError("No se pudo guardar el presupuesto.", error);
   }
 
   const quote = data as QuoteRecord;
@@ -459,7 +586,7 @@ export async function upsertQuote(inputValues: QuoteFormValues, quoteId?: string
       .eq("workshop_id", workshop.id);
 
     if (deleteError && !isMissingRelationError(deleteError)) {
-      throw deleteError;
+      throw new QuoteDataError("No se pudieron actualizar los items del presupuesto.", deleteError);
     }
   }
 
@@ -467,7 +594,7 @@ export async function upsertQuote(inputValues: QuoteFormValues, quoteId?: string
     const { error: itemsInsertError } = await supabase.from("quote_items").insert(itemsPayload);
 
     if (itemsInsertError) {
-      throw itemsInsertError;
+      throw new QuoteDataError("No se pudieron guardar los items del presupuesto.", itemsInsertError);
     }
   }
 
@@ -480,9 +607,13 @@ export async function updateQuoteLifecycle(
   quoteId: string,
   action: "archive" | "restore" | "delete",
 ) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("quotes.manage");
   const supabase = await createSupabaseDataClient();
   const now = new Date().toISOString();
+
+  if (!(["archive", "restore", "delete"] as string[]).includes(action)) {
+    throw new QuoteDataError("No se pudo actualizar el presupuesto.", new Error("Invalid quote lifecycle action"));
+  }
 
   const payload =
     action === "archive"
@@ -500,18 +631,18 @@ export async function updateQuoteLifecycle(
     .maybeSingle();
 
   if (error) {
-    throw error;
+    throw new QuoteDataError("No se pudo actualizar el presupuesto.", error);
   }
 
   if (!data) {
-    throw new Error("Presupuesto no encontrado.");
+    throw new QuoteInputError("quote_not_available");
   }
 
   return normalizeQuoteRecord(data as QuoteRecord);
 }
 
 export async function ensureQuotePublicShare(quoteId: string) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("quotes.manage");
   const supabase = await createSupabaseDataClient();
 
   const { data: existingData, error: existingError } = await supabase
@@ -522,7 +653,7 @@ export async function ensureQuotePublicShare(quoteId: string) {
     .maybeSingle();
 
   if (existingError) {
-    throw existingError;
+    throw new QuoteDataError("No se pudo validar el presupuesto.", existingError);
   }
 
   const existing = existingData as Pick<
@@ -531,7 +662,7 @@ export async function ensureQuotePublicShare(quoteId: string) {
   > | null;
 
   if (!existing) {
-    throw new Error("Presupuesto no encontrado.");
+    throw new QuoteInputError("quote_not_available");
   }
 
   const payload = {
@@ -550,13 +681,16 @@ export async function ensureQuotePublicShare(quoteId: string) {
     .single();
 
   if (error) {
-    throw error;
+    throw new QuoteDataError("No se pudo preparar el link del presupuesto.", error);
   }
 
   const token = (data as { public_share_token: string | null }).public_share_token;
 
   if (!token) {
-    throw new Error("No se pudo generar el link publico del presupuesto.");
+    throw new QuoteDataError(
+      "No se pudo preparar el link del presupuesto.",
+      new Error("Quote share token was not generated"),
+    );
   }
 
   return {

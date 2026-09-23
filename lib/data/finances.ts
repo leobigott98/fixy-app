@@ -1,7 +1,7 @@
 import type { Route } from "next";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { requireWorkshopOperation, type WorkshopRecord } from "@/lib/data/workshops";
 import {
   getExpenseCategoryLabel,
   getPaymentMethodLabel,
@@ -20,12 +20,14 @@ import {
 
 type ClientLite = {
   id: string;
+  workshop_id: string;
   full_name: string;
   whatsapp_phone: string | null;
 };
 
 type WorkOrderLite = {
   id: string;
+  workshop_id: string;
   client_id: string | null;
   code: string | null;
   title: string;
@@ -71,6 +73,29 @@ export type ExpenseAssetRecord = {
   created_at: string;
 };
 
+export type FinanceInputErrorCode =
+  | "client_not_available"
+  | "work_order_not_available"
+  | "work_order_client_mismatch"
+  | "work_order_cancelled";
+
+export class FinanceInputError extends Error {
+  readonly code: FinanceInputErrorCode;
+
+  constructor(code: FinanceInputErrorCode, message: string) {
+    super(message);
+    this.name = "FinanceInputError";
+    this.code = code;
+  }
+}
+
+class FinanceDataError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "FinanceDataError";
+  }
+}
+
 type PaymentRowWithRelations = Omit<PaymentRecord, "amount"> & {
   amount: number | string | null;
   clients: ClientLite | ClientLite[] | null;
@@ -85,6 +110,7 @@ type ExpenseRowWithRelations = Omit<ExpenseRecord, "amount"> & {
 
 type WorkOrderBalanceRow = {
   id: string;
+  workshop_id: string;
   client_id: string | null;
   code: string | null;
   title: string;
@@ -97,6 +123,14 @@ type WorkOrderBalanceRow = {
 
 function toSingleRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function toWorkshopRelation<T extends { workshop_id: string }>(
+  value: T | T[] | null,
+  workshopId: string,
+): T | null {
+  const relation = toSingleRelation(value);
+  return relation?.workshop_id === workshopId ? relation : null;
 }
 
 function getMonthStart() {
@@ -191,7 +225,7 @@ function filterByQuery(haystack: string[], query: string) {
 }
 
 export async function getFinancesOverview(search?: string): Promise<FinancesOverviewData> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("finances.view");
   const supabase = await createSupabaseDataClient();
   const monthStart = getMonthStart();
   const todayStart = getTodayStart();
@@ -201,19 +235,19 @@ export async function getFinancesOverview(search?: string): Promise<FinancesOver
     supabase
       .from("payments")
       .select(
-        "*, clients(id,full_name,whatsapp_phone), work_orders(id,client_id,code,title,status,total_amount,promised_date,vehicle_label)",
+        "*, clients(id,workshop_id,full_name,whatsapp_phone), work_orders(id,workshop_id,client_id,code,title,status,total_amount,promised_date,vehicle_label)",
       )
       .eq("workshop_id", workshop.id)
       .order("paid_at", { ascending: false }),
     supabase
       .from("expenses")
-      .select("*, work_orders(id,client_id,code,title,status,total_amount,promised_date,vehicle_label), expense_assets(*)")
+      .select("*, work_orders(id,workshop_id,client_id,code,title,status,total_amount,promised_date,vehicle_label), expense_assets(*)")
       .eq("workshop_id", workshop.id)
       .order("spent_at", { ascending: false }),
     supabase
       .from("work_orders")
       .select(
-        "id,client_id,code,title,status,total_amount,promised_date,vehicle_label, clients(id,full_name,whatsapp_phone)",
+        "id,workshop_id,client_id,code,title,status,total_amount,promised_date,vehicle_label, clients(id,workshop_id,full_name,whatsapp_phone)",
       )
       .eq("workshop_id", workshop.id)
       .neq("status", "cancelada")
@@ -225,19 +259,21 @@ export async function getFinancesOverview(search?: string): Promise<FinancesOver
   );
 
   if (nonMissingError) {
-    throw nonMissingError;
+    throw new FinanceDataError("No se pudo cargar la informacion financiera.", nonMissingError);
   }
 
   const payments = ((paymentsResult.data as PaymentRowWithRelations[] | null) ?? []).map((row) => ({
     payment: normalizePaymentRecord(row),
-    client: toSingleRelation(row.clients),
-    workOrder: toSingleRelation(row.work_orders),
+    client: toWorkshopRelation(row.clients, workshop.id),
+    workOrder: toWorkshopRelation(row.work_orders, workshop.id),
   }));
 
   const expenses = ((expensesResult.data as ExpenseRowWithRelations[] | null) ?? []).map((row) => ({
     expense: normalizeExpenseRecord(row),
-    workOrder: toSingleRelation(row.work_orders),
-    assets: (row.expense_assets ?? []).sort((a, b) => a.sort_order - b.sort_order),
+    workOrder: toWorkshopRelation(row.work_orders, workshop.id),
+    assets: (row.expense_assets ?? [])
+      .filter((asset) => asset.workshop_id === workshop.id)
+      .sort((a, b) => a.sort_order - b.sort_order),
   }));
 
   const workOrders = (workOrdersResult.data as WorkOrderBalanceRow[] | null) ?? [];
@@ -262,7 +298,7 @@ export async function getFinancesOverview(search?: string): Promise<FinancesOver
           ...workOrder,
           total_amount: totalAmount,
         },
-        client: toSingleRelation(workOrder.clients),
+        client: toWorkshopRelation(workOrder.clients, workshop.id),
         totalAmount,
         collectedAmount,
         pendingBalance,
@@ -344,7 +380,7 @@ export async function getFinancesOverview(search?: string): Promise<FinancesOver
 }
 
 export async function getPaymentFormOptions(): Promise<PaymentFormOptions> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("finances.view");
   const supabase = await createSupabaseDataClient();
 
   const [clientsResult, workOrdersResult, paymentsResult] = await Promise.all([
@@ -366,7 +402,7 @@ export async function getPaymentFormOptions(): Promise<PaymentFormOptions> {
   );
 
   if (nonMissingError) {
-    throw nonMissingError;
+    throw new FinanceDataError("No se pudieron cargar las opciones de pago.", nonMissingError);
   }
 
   const collectedByWorkOrder = (((paymentsResult.data as Array<{
@@ -411,7 +447,7 @@ export async function getPaymentFormOptions(): Promise<PaymentFormOptions> {
 }
 
 export async function getExpenseFormOptions(): Promise<ExpenseFormOptions> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("finances.view");
   const supabase = await createSupabaseDataClient();
 
   const { data, error } = await supabase
@@ -425,7 +461,7 @@ export async function getExpenseFormOptions(): Promise<ExpenseFormOptions> {
       return { workOrders: [] };
     }
 
-    throw error;
+    throw new FinanceDataError("No se pudieron cargar las opciones de gasto.", error);
   }
 
   return {
@@ -439,9 +475,27 @@ export async function getExpenseFormOptions(): Promise<ExpenseFormOptions> {
 }
 
 export async function recordPayment(values: PaymentFormValues) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("payments.record");
   const input = normalizePaymentInput(values);
   const supabase = await createSupabaseDataClient();
+
+  const { data: clientData, error: clientError } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("workshop_id", workshop.id)
+    .eq("id", input.clientId)
+    .maybeSingle();
+
+  if (clientError) {
+    throw new FinanceDataError("No se pudo validar el cliente del pago.", clientError);
+  }
+
+  if (!clientData) {
+    throw new FinanceInputError(
+      "client_not_available",
+      "El cliente seleccionado no esta disponible.",
+    );
+  }
 
   if (input.workOrderId) {
     const { data, error } = await supabase
@@ -452,21 +506,30 @@ export async function recordPayment(values: PaymentFormValues) {
       .maybeSingle();
 
     if (error) {
-      throw error;
+      throw new FinanceDataError("No se pudo validar la orden del pago.", error);
     }
 
     const workOrder = data as { id: string; client_id: string | null; status: string } | null;
 
     if (!workOrder) {
-      throw new Error("La orden seleccionada no existe.");
+      throw new FinanceInputError(
+        "work_order_not_available",
+        "La orden seleccionada no esta disponible.",
+      );
     }
 
     if (workOrder.client_id && workOrder.client_id !== input.clientId) {
-      throw new Error("La orden no coincide con el cliente seleccionado.");
+      throw new FinanceInputError(
+        "work_order_client_mismatch",
+        "La orden no coincide con el cliente seleccionado.",
+      );
     }
 
     if (workOrder.status === "cancelada") {
-      throw new Error("No puedes registrar pagos sobre una orden cancelada.");
+      throw new FinanceInputError(
+        "work_order_cancelled",
+        "No puedes registrar pagos sobre una orden cancelada.",
+      );
     }
   }
 
@@ -485,14 +548,14 @@ export async function recordPayment(values: PaymentFormValues) {
   const { data, error } = await supabase.from("payments").insert(payload).select("*").single();
 
   if (error) {
-    throw error;
+    throw new FinanceDataError("No se pudo registrar el pago.", error);
   }
 
   return data as PaymentRecord;
 }
 
 export async function createExpense(values: ExpenseFormValues) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("expenses.record");
   const input = normalizeExpenseInput(values);
   const supabase = await createSupabaseDataClient();
 
@@ -505,11 +568,14 @@ export async function createExpense(values: ExpenseFormValues) {
       .maybeSingle();
 
     if (error) {
-      throw error;
+      throw new FinanceDataError("No se pudo validar la orden del gasto.", error);
     }
 
     if (!data) {
-      throw new Error("La orden vinculada no existe.");
+      throw new FinanceInputError(
+        "work_order_not_available",
+        "La orden vinculada no esta disponible.",
+      );
     }
   }
 
@@ -525,7 +591,7 @@ export async function createExpense(values: ExpenseFormValues) {
   const { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
 
   if (error) {
-    throw error;
+    throw new FinanceDataError("No se pudo registrar el gasto.", error);
   }
 
   const expense = data as ExpenseRecord;
@@ -541,7 +607,7 @@ export async function createExpense(values: ExpenseFormValues) {
     );
 
     if (assetError) {
-      throw assetError;
+      throw new FinanceDataError("No se pudieron asociar los archivos del gasto.", assetError);
     }
   }
 
@@ -552,17 +618,17 @@ export type PaymentReceiptDetail = {
   payment: PaymentRecord;
   client: ClientLite | null;
   workOrder: WorkOrderLite | null;
-  workshop: Awaited<ReturnType<typeof requireCurrentWorkshop>>;
+  workshop: WorkshopRecord;
 };
 
 export async function getPaymentReceiptDetail(paymentId: string): Promise<PaymentReceiptDetail> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("finances.view");
   const supabase = await createSupabaseDataClient();
 
   const { data, error } = await supabase
     .from("payments")
     .select(
-      "*, clients(id,full_name,whatsapp_phone), work_orders(id,client_id,code,title,status,total_amount,promised_date,vehicle_label)",
+      "*, clients(id,workshop_id,full_name,whatsapp_phone), work_orders(id,workshop_id,client_id,code,title,status,total_amount,promised_date,vehicle_label)",
     )
     .eq("workshop_id", workshop.id)
     .eq("id", paymentId)
@@ -573,7 +639,7 @@ export async function getPaymentReceiptDetail(paymentId: string): Promise<Paymen
       throw new Error("Pago no encontrado.");
     }
 
-    throw error;
+    throw new FinanceDataError("No se pudo cargar el recibo.", error);
   }
 
   const row = data as PaymentRowWithRelations | null;
@@ -584,8 +650,8 @@ export async function getPaymentReceiptDetail(paymentId: string): Promise<Paymen
 
   return {
     payment: normalizePaymentRecord(row),
-    client: toSingleRelation(row.clients),
-    workOrder: toSingleRelation(row.work_orders),
+    client: toWorkshopRelation(row.clients, workshop.id),
+    workOrder: toWorkshopRelation(row.work_orders, workshop.id),
     workshop,
   };
 }

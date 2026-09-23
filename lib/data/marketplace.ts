@@ -9,7 +9,7 @@ import {
 } from "@/lib/marketplace/schema";
 import { normalizeSessionPhone } from "@/lib/auth/session-utils";
 import { upsertAppointment } from "@/lib/data/appointments";
-import type { WorkshopRecord } from "@/lib/data/workshops";
+import { requireWorkshopOperation, type WorkshopRecord } from "@/lib/data/workshops";
 import { sendOwnerAppointmentConfirmedEmail, sendWorkshopInquiryEmail } from "@/lib/notifications/email";
 import { slugifyWorkshopPublicSlug } from "@/lib/workshops/schema";
 import { buildVehicleLabel } from "@/lib/vehicles/schema";
@@ -90,6 +90,7 @@ type OwnerProfileRow = {
 
 type OwnerVehicleRow = {
   id: string;
+  owner_profile_id: string;
   nickname: string | null;
   plate: string | null;
   make: string;
@@ -171,6 +172,55 @@ export type WorkshopReviewManagementItem = {
   publishedAt: string | null;
 };
 
+export type MarketplaceInputErrorCode =
+  | "workshop_not_available"
+  | "inquiry_not_available"
+  | "review_not_available"
+  | "inquiry_not_schedulable"
+  | "invalid_inquiry"
+  | "invalid_review"
+  | "invalid_review_response";
+
+export class MarketplaceInputError extends Error {
+  readonly code: MarketplaceInputErrorCode;
+
+  constructor(code: MarketplaceInputErrorCode) {
+    const messages: Record<MarketplaceInputErrorCode, string> = {
+      workshop_not_available: "El taller seleccionado no esta disponible.",
+      inquiry_not_available: "La solicitud seleccionada no esta disponible.",
+      review_not_available: "La resena seleccionada no esta disponible.",
+      inquiry_not_schedulable: "La solicitud no se puede confirmar y agendar.",
+      invalid_inquiry: "Revisa los datos de tu solicitud.",
+      invalid_review: "Revisa tu resena antes de enviarla.",
+      invalid_review_response: "Revisa la respuesta antes de guardarla.",
+    };
+
+    super(messages[code]);
+    this.name = "MarketplaceInputError";
+    this.code = code;
+  }
+}
+
+class MarketplaceDataError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "MarketplaceDataError";
+  }
+}
+
+async function requireMarketplaceWorkshop(
+  operation: "marketplace.view" | "marketplace.manage",
+  requestedWorkshopId: string,
+) {
+  const { workshop } = await requireWorkshopOperation(operation);
+
+  if (requestedWorkshopId !== workshop.id) {
+    throw new MarketplaceInputError("workshop_not_available");
+  }
+
+  return workshop;
+}
+
 function emptyReviewSummary(): MarketplaceReviewSummary {
   return {
     totalApproved: 0,
@@ -205,7 +255,7 @@ async function getReviewSummaryMap(workshopIds: string[]) {
       return new Map<string, MarketplaceReviewSummary>();
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudo cargar el resumen de resenas.", error);
   }
 
   const grouped = new Map<string, { total: number; sum: number }>();
@@ -245,7 +295,7 @@ async function getRecentApprovedReviews(workshopId: string) {
       return [] as MarketplaceReviewCard[];
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudieron cargar las resenas recientes.", error);
   }
 
   return (((data as WorkshopReviewRow[] | null) ?? []).map((review) => ({
@@ -304,12 +354,12 @@ export async function getMarketplaceDirectory(
       return { workshops: [], locations: [], total: 0 };
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudo cargar el directorio de talleres.", error);
   }
 
   if (locationsError) {
     if (!isMissingRelationError(locationsError)) {
-      throw locationsError;
+      throw new MarketplaceDataError("No se pudieron cargar las ubicaciones disponibles.", locationsError);
     }
   }
 
@@ -352,7 +402,7 @@ export async function getMarketplaceWorkshopDetailBySlug(slug: string) {
       return null;
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudo cargar el taller del marketplace.", error);
   }
 
   const workshop = (data as PublicWorkshopBase | null) ?? null;
@@ -376,11 +426,17 @@ export async function createMarketplaceInquiry(
   workshopSlug: string,
   input: MarketplaceInquiryInput,
 ) {
-  const parsed = marketplaceInquirySchema.parse(input);
+  const parsedResult = marketplaceInquirySchema.safeParse(input);
+
+  if (!parsedResult.success) {
+    throw new MarketplaceInputError("invalid_inquiry");
+  }
+
+  const parsed = parsedResult.data;
   const workshop = await getMarketplaceWorkshopDetailBySlug(workshopSlug);
 
   if (!workshop) {
-    throw new Error("El taller ya no esta disponible para solicitudes publicas.");
+    throw new MarketplaceInputError("workshop_not_available");
   }
 
   const supabase = await createSupabaseDataClient();
@@ -402,10 +458,10 @@ export async function createMarketplaceInquiry(
 
   if (error) {
     if (isMissingRelationError(error)) {
-      throw new Error("La base de solicitudes aun no esta disponible.");
+      throw new MarketplaceDataError("No se pudo registrar la solicitud en este momento.", error);
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudo registrar la solicitud en este momento.", error);
   }
 
   try {
@@ -431,11 +487,12 @@ export async function createMarketplaceInquiry(
 }
 
 export async function getWorkshopNotificationCount(workshopId: string) {
+  const workshop = await requireMarketplaceWorkshop("marketplace.view", workshopId);
   const supabase = await createSupabaseDataClient();
   const { count, error } = await supabase
     .from("marketplace_inquiries")
     .select("*", { count: "exact", head: true })
-    .eq("workshop_id", workshopId)
+    .eq("workshop_id", workshop.id)
     .eq("status", "new");
 
   if (error) {
@@ -443,18 +500,19 @@ export async function getWorkshopNotificationCount(workshopId: string) {
       return 0;
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudo cargar el conteo de notificaciones.", error);
   }
 
   return count ?? 0;
 }
 
 export async function getWorkshopNotifications(workshopId: string) {
+  const workshop = await requireMarketplaceWorkshop("marketplace.view", workshopId);
   const supabase = await createSupabaseDataClient();
   const { data, error } = await supabase
     .from("marketplace_inquiries")
     .select("*")
-    .eq("workshop_id", workshopId)
+    .eq("workshop_id", workshop.id)
     .order("created_at", { ascending: false })
     .limit(30);
 
@@ -463,7 +521,7 @@ export async function getWorkshopNotifications(workshopId: string) {
       return [] as WorkshopNotificationItem[];
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudieron cargar las notificaciones.", error);
   }
 
   const inquiries = (data as MarketplaceInquiryRow[] | null) ?? [];
@@ -476,11 +534,11 @@ export async function getWorkshopNotifications(workshopId: string) {
   const { data: ownerAppointmentData, error: ownerAppointmentError } = await supabase
     .from("owner_appointment_requests")
     .select("*")
-    .eq("workshop_id", workshopId)
+    .eq("workshop_id", workshop.id)
     .in("marketplace_inquiry_id", inquiryIds);
 
   if (ownerAppointmentError && !isMissingRelationError(ownerAppointmentError)) {
-    throw ownerAppointmentError;
+    throw new MarketplaceDataError("No se pudieron cargar las citas relacionadas.", ownerAppointmentError);
   }
 
   const ownerAppointments = (ownerAppointmentData as OwnerAppointmentRequestRow[] | null) ?? [];
@@ -500,7 +558,7 @@ export async function getWorkshopNotifications(workshopId: string) {
       .in("id", ownerProfileIds);
 
     if (ownerProfilesError && !isMissingRelationError(ownerProfilesError)) {
-      throw ownerProfilesError;
+      throw new MarketplaceDataError("No se pudieron cargar los propietarios relacionados.", ownerProfilesError);
     }
 
     ownerProfileMap = new Map(
@@ -543,19 +601,26 @@ export async function getWorkshopNotifications(workshopId: string) {
 }
 
 export async function markMarketplaceInquiryAsContacted(inquiryId: string, workshopId: string) {
+  const workshop = await requireMarketplaceWorkshop("marketplace.manage", workshopId);
   const supabase = await createSupabaseDataClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("marketplace_inquiries")
     .update({ status: "contacted" })
     .eq("id", inquiryId)
-    .eq("workshop_id", workshopId);
+    .eq("workshop_id", workshop.id)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     if (isMissingRelationError(error)) {
-      throw new Error("La base de solicitudes aun no esta disponible.");
+      throw new MarketplaceDataError("No se pudo actualizar la solicitud.", error);
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudo actualizar la solicitud.", error);
+  }
+
+  if (!data) {
+    throw new MarketplaceInputError("inquiry_not_available");
   }
 }
 
@@ -567,7 +632,7 @@ async function findOrCreateClientFromOwnerRequest(params: {
 }) {
   const supabase = await createSupabaseDataClient();
   const normalizedPhone = normalizeSessionPhone(params.requesterPhone);
-  const { data: existingClient } = await supabase
+  const { data: existingClient, error: existingClientError } = await supabase
     .from("clients")
     .select("*")
     .eq("workshop_id", params.workshopId)
@@ -581,6 +646,10 @@ async function findOrCreateClientFromOwnerRequest(params: {
         .join(","),
     )
     .maybeSingle();
+
+  if (existingClientError) {
+    throw new MarketplaceDataError("No se pudo validar el cliente relacionado.", existingClientError);
+  }
 
   if (existingClient) {
     return existingClient as {
@@ -602,7 +671,7 @@ async function findOrCreateClientFromOwnerRequest(params: {
     .single();
 
   if (error) {
-    throw error;
+    throw new MarketplaceDataError("No se pudo crear el cliente relacionado.", error);
   }
 
   return data as { id: string };
@@ -616,13 +685,17 @@ async function findOrCreateVehicleFromOwnerRequest(params: {
   const supabase = await createSupabaseDataClient();
 
   if (params.ownerVehicle.plate) {
-    const { data: existingVehicle } = await supabase
+    const { data: existingVehicle, error: existingVehicleError } = await supabase
       .from("vehicles")
       .select("id")
       .eq("workshop_id", params.workshopId)
       .eq("client_id", params.clientId)
       .eq("plate", params.ownerVehicle.plate)
       .maybeSingle();
+
+    if (existingVehicleError) {
+      throw new MarketplaceDataError("No se pudo validar el vehiculo relacionado.", existingVehicleError);
+    }
 
     if (existingVehicle) {
       return existingVehicle as { id: string };
@@ -655,54 +728,55 @@ async function findOrCreateVehicleFromOwnerRequest(params: {
     .single();
 
   if (error) {
-    throw error;
+    throw new MarketplaceDataError("No se pudo crear el vehiculo relacionado.", error);
   }
 
   return data as { id: string };
 }
 
 export async function confirmAndScheduleMarketplaceInquiry(inquiryId: string, workshopId: string) {
+  const currentWorkshop = await requireMarketplaceWorkshop("marketplace.manage", workshopId);
   const supabase = await createSupabaseDataClient();
   const { data: inquiryData, error: inquiryError } = await supabase
     .from("marketplace_inquiries")
     .select("*")
     .eq("id", inquiryId)
-    .eq("workshop_id", workshopId)
+    .eq("workshop_id", currentWorkshop.id)
     .maybeSingle();
 
   if (inquiryError) {
-    throw inquiryError;
+    throw new MarketplaceDataError("No se pudo validar la solicitud.", inquiryError);
   }
 
   const inquiry = (inquiryData as MarketplaceInquiryRow | null) ?? null;
 
   if (!inquiry) {
-    throw new Error("La solicitud ya no existe.");
+    throw new MarketplaceInputError("inquiry_not_available");
   }
 
   const { data: ownerAppointmentData, error: ownerAppointmentError } = await supabase
     .from("owner_appointment_requests")
     .select("*")
-    .eq("workshop_id", workshopId)
+    .eq("workshop_id", currentWorkshop.id)
     .eq("marketplace_inquiry_id", inquiryId)
     .maybeSingle();
 
   if (ownerAppointmentError) {
     if (isMissingRelationError(ownerAppointmentError)) {
-      throw new Error("Esta solicitud aun no trae una fecha desde la app del propietario.");
+      throw new MarketplaceInputError("inquiry_not_schedulable");
     }
 
-    throw ownerAppointmentError;
+    throw new MarketplaceDataError("No se pudo validar la cita relacionada.", ownerAppointmentError);
   }
 
   const ownerAppointment = (ownerAppointmentData as OwnerAppointmentRequestRow | null) ?? null;
 
   if (!ownerAppointment) {
-    throw new Error("Solo se puede confirmar directo una solicitud creada desde la app del propietario.");
+    throw new MarketplaceInputError("inquiry_not_schedulable");
   }
 
   if (ownerAppointment.status !== "solicitada") {
-    throw new Error("Esta solicitud ya fue gestionada.");
+    throw new MarketplaceInputError("inquiry_not_schedulable");
   }
 
   const [{ data: ownerProfileData, error: ownerProfileError }, { data: ownerVehicleData, error: ownerVehicleError }, { data: workshopData, error: workshopError }] =
@@ -714,18 +788,22 @@ export async function confirmAndScheduleMarketplaceInquiry(inquiryId: string, wo
         .maybeSingle(),
       supabase
         .from("owner_vehicles")
-        .select("id,nickname,plate,make,model,vehicle_year,color,mileage,vin,photo_urls,notes")
+        .select("id,owner_profile_id,nickname,plate,make,model,vehicle_year,color,mileage,vin,photo_urls,notes")
         .eq("id", ownerAppointment.owner_vehicle_id)
+        .eq("owner_profile_id", ownerAppointment.owner_profile_id)
         .maybeSingle(),
       supabase
         .from("workshops")
         .select("workshop_name,whatsapp_phone")
-        .eq("id", workshopId)
+        .eq("id", currentWorkshop.id)
         .maybeSingle(),
     ]);
 
   if (ownerProfileError || ownerVehicleError || workshopError) {
-    throw ownerProfileError || ownerVehicleError || workshopError;
+    throw new MarketplaceDataError(
+      "No se pudieron validar los datos relacionados con la solicitud.",
+      ownerProfileError || ownerVehicleError || workshopError,
+    );
   }
 
   const ownerProfile = (ownerProfileData as OwnerProfileRow | null) ?? null;
@@ -733,49 +811,62 @@ export async function confirmAndScheduleMarketplaceInquiry(inquiryId: string, wo
   const workshop = (workshopData as { workshop_name: string; whatsapp_phone: string | null } | null) ?? null;
 
   if (!ownerProfile || !ownerVehicle || !workshop) {
-    throw new Error("Faltan datos para confirmar y agendar esta solicitud.");
+    throw new MarketplaceInputError("inquiry_not_schedulable");
   }
 
   const client = await findOrCreateClientFromOwnerRequest({
-    workshopId,
+    workshopId: currentWorkshop.id,
     requesterName: ownerProfile.full_name,
     requesterPhone: ownerProfile.phone,
     requesterEmail: ownerProfile.email,
   });
 
   const vehicle = await findOrCreateVehicleFromOwnerRequest({
-    workshopId,
+    workshopId: currentWorkshop.id,
     clientId: client.id,
     ownerVehicle,
   });
 
   const confirmationNote = `Cita confirmada para ${formatAppointmentDate(ownerAppointment.requested_date)} a las ${formatAppointmentTime(ownerAppointment.requested_time)}.`;
 
-  const appointment = await upsertAppointment({
-    clientId: client.id,
-    vehicleId: vehicle.id,
-    assignedMechanicId: "",
-    date: ownerAppointment.requested_date,
-    time: formatAppointmentTime(ownerAppointment.requested_time),
-    type: "ingreso_servicio",
-    status: "confirmada",
-    notes: `${inquiry.message}\n\n${confirmationNote}`,
-  });
+  let appointment: { id: string };
 
-  await Promise.all([
+  try {
+    appointment = await upsertAppointment({
+      clientId: client.id,
+      vehicleId: vehicle.id,
+      assignedMechanicId: "",
+      date: ownerAppointment.requested_date,
+      time: formatAppointmentTime(ownerAppointment.requested_time),
+      type: "ingreso_servicio",
+      status: "confirmada",
+      notes: `${inquiry.message}\n\n${confirmationNote}`,
+    });
+  } catch (error) {
+    throw new MarketplaceDataError("No se pudo crear la cita relacionada.", error);
+  }
+
+  const [inquiryUpdateResult, ownerAppointmentUpdateResult] = await Promise.all([
     supabase
       .from("marketplace_inquiries")
       .update({ status: "contacted" })
       .eq("id", inquiryId)
-      .eq("workshop_id", workshopId),
+      .eq("workshop_id", currentWorkshop.id),
     supabase
       .from("owner_appointment_requests")
       .update({
         status: "confirmada",
         workshop_response_note: confirmationNote,
       })
-      .eq("id", ownerAppointment.id),
+      .eq("id", ownerAppointment.id)
+      .eq("workshop_id", currentWorkshop.id),
   ]);
+
+  const confirmationError = inquiryUpdateResult.error || ownerAppointmentUpdateResult.error;
+
+  if (confirmationError) {
+    throw new MarketplaceDataError("No se pudo confirmar la solicitud.", confirmationError);
+  }
 
   if (ownerProfile.email) {
     try {
@@ -808,11 +899,17 @@ export async function createMarketplaceReview(
   workshopSlug: string,
   input: MarketplaceReviewInput,
 ) {
-  const parsed = marketplaceReviewSchema.parse(input);
+  const parsedResult = marketplaceReviewSchema.safeParse(input);
+
+  if (!parsedResult.success) {
+    throw new MarketplaceInputError("invalid_review");
+  }
+
+  const parsed = parsedResult.data;
   const workshop = await getMarketplaceWorkshopDetailBySlug(workshopSlug);
 
   if (!workshop) {
-    throw new Error("El taller ya no esta disponible para recibir resenas.");
+    throw new MarketplaceInputError("workshop_not_available");
   }
 
   const supabase = await createSupabaseDataClient();
@@ -832,10 +929,10 @@ export async function createMarketplaceReview(
 
   if (error) {
     if (isMissingRelationError(error)) {
-      throw new Error("La base de resenas aun no esta disponible.");
+      throw new MarketplaceDataError("No se pudo publicar la resena en este momento.", error);
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudo publicar la resena en este momento.", error);
   }
 
   return {
@@ -845,11 +942,12 @@ export async function createMarketplaceReview(
 }
 
 export async function getWorkshopReviewsForAdmin(workshopId: string) {
+  const workshop = await requireMarketplaceWorkshop("marketplace.view", workshopId);
   const supabase = await createSupabaseDataClient();
   const { data, error } = await supabase
     .from("workshop_reviews")
     .select("id,reviewer_name,title,rating,comment,workshop_response,workshop_response_at,published_at,created_at,status")
-    .eq("workshop_id", workshopId)
+    .eq("workshop_id", workshop.id)
     .order("published_at", { ascending: false })
     .limit(50);
 
@@ -858,7 +956,7 @@ export async function getWorkshopReviewsForAdmin(workshopId: string) {
       return [] as WorkshopReviewManagementItem[];
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudieron cargar las resenas del taller.", error);
   }
 
   return (((data as WorkshopReviewRow[] | null) ?? []).map((review) => ({
@@ -878,22 +976,35 @@ export async function respondToWorkshopReview(
   workshopId: string,
   input: WorkshopReviewResponseInput,
 ) {
-  const parsed = workshopReviewResponseSchema.parse(input);
+  const workshop = await requireMarketplaceWorkshop("marketplace.manage", workshopId);
+  const parsedResult = workshopReviewResponseSchema.safeParse(input);
+
+  if (!parsedResult.success) {
+    throw new MarketplaceInputError("invalid_review_response");
+  }
+
+  const parsed = parsedResult.data;
   const supabase = await createSupabaseDataClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("workshop_reviews")
     .update({
       workshop_response: parsed.response,
       workshop_response_at: new Date().toISOString(),
     })
     .eq("id", reviewId)
-    .eq("workshop_id", workshopId);
+    .eq("workshop_id", workshop.id)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     if (isMissingRelationError(error)) {
-      throw new Error("La base de resenas aun no esta disponible.");
+      throw new MarketplaceDataError("No se pudo guardar la respuesta a la resena.", error);
     }
 
-    throw error;
+    throw new MarketplaceDataError("No se pudo guardar la respuesta a la resena.", error);
+  }
+
+  if (!data) {
+    throw new MarketplaceInputError("review_not_available");
   }
 }

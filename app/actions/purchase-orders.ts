@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
-import { upsertPurchaseOrder } from "@/lib/data/purchase-orders";
+import {
+  PurchaseOrderInputError,
+  upsertPurchaseOrder,
+} from "@/lib/data/purchase-orders";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import {
   purchaseOrderFormSchema,
   type PurchaseOrderFormValues,
@@ -24,17 +28,18 @@ export async function savePurchaseOrderAction(
   values: PurchaseOrderFormValues,
   purchaseOrderId?: string,
 ): Promise<SavePurchaseOrderResult> {
-  const parsed = purchaseOrderFormSchema.safeParse(values);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      message: "Revisa la orden de compra antes de guardar.",
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
-  }
-
   try {
+    await requireWorkshopOperation("purchase_orders.manage");
+    const parsed = purchaseOrderFormSchema.safeParse(values);
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: "Revisa la orden de compra antes de guardar.",
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
     const purchaseOrder = await upsertPurchaseOrder(parsed.data, purchaseOrderId);
 
     revalidatePath("/app/purchase-orders");
@@ -51,7 +56,7 @@ export async function savePurchaseOrderAction(
     return {
       success: false,
       message:
-        error instanceof Error
+        error instanceof PurchaseOrderInputError
           ? error.message
           : "No se pudo guardar la orden de compra.",
     };

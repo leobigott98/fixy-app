@@ -17,7 +17,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <AuthShell
       title="Entrar a Fixy"
-      description="Elige el metodo que te resulte mas comodo. Puedes entrar con contrasena, magic link o SMS segun como tengas configurada tu cuenta."
+      description="Elige el método que te resulte mas comodo. Puedes entrar con contrasena, magic link o SMS segun como tengas configurada tu cuenta."
     >
       <AuthForm initialNoticeKey={getFirstParam(params.auth) ?? null} variant="login" />
     </AuthShell>

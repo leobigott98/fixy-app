@@ -2,7 +2,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
 import type { ClientProfileInput } from "@/lib/clients/schema";
 
@@ -74,12 +74,28 @@ export type ClientDetailData = {
   };
 };
 
+export class ClientInputError extends Error {
+  readonly code = "client_not_available";
+
+  constructor() {
+    super("El cliente seleccionado no esta disponible.");
+    this.name = "ClientInputError";
+  }
+}
+
+class ClientDataError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "ClientDataError";
+  }
+}
+
 function normalizeSearchQuery(query?: string) {
   return query?.trim() ?? "";
 }
 
 export async function getClientsList(search?: string): Promise<ClientListItem[]> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("clients.view");
   const supabase = await createSupabaseDataClient();
   const query = normalizeSearchQuery(search);
 
@@ -107,7 +123,7 @@ export async function getClientsList(search?: string): Promise<ClientListItem[]>
       return [];
     }
 
-    throw clientsError;
+    throw new ClientDataError("No se pudieron cargar los clientes.", clientsError);
   }
 
   const clients = (clientsData as ClientRecord[] | null) ?? [];
@@ -141,7 +157,7 @@ export async function getClientsList(search?: string): Promise<ClientListItem[]>
   );
 
   if (nonMissingError) {
-    throw nonMissingError;
+    throw new ClientDataError("No se pudo cargar la actividad de los clientes.", nonMissingError);
   }
 
   const vehicles = ((vehiclesResult.data as VehicleLiteRow[] | null) ?? []).reduce<
@@ -193,7 +209,7 @@ export async function getClientsList(search?: string): Promise<ClientListItem[]>
 }
 
 export async function getClientDetail(clientId: string): Promise<ClientDetailData> {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("clients.view");
   const supabase = await createSupabaseDataClient();
 
   const { data: clientData, error: clientError } = await supabase
@@ -208,7 +224,7 @@ export async function getClientDetail(clientId: string): Promise<ClientDetailDat
       notFound();
     }
 
-    throw clientError;
+    throw new ClientDataError("No se pudo cargar el cliente.", clientError);
   }
 
   const client = clientData as ClientRecord | null;
@@ -245,7 +261,7 @@ export async function getClientDetail(clientId: string): Promise<ClientDetailDat
   );
 
   if (nonMissingError) {
-    throw nonMissingError;
+    throw new ClientDataError("No se pudo cargar el historial del cliente.", nonMissingError);
   }
 
   const workOrders = (workOrdersResult.data as WorkOrderLiteRow[] | null) ?? [];
@@ -274,7 +290,7 @@ export async function getClientDetail(clientId: string): Promise<ClientDetailDat
       );
 
     if (paymentsError && !isMissingRelationError(paymentsError)) {
-      throw paymentsError;
+      throw new ClientDataError("No se pudo cargar el resumen de pagos del cliente.", paymentsError);
     }
 
     const payments = (paymentsData as PaymentLiteRow[] | null) ?? [];
@@ -302,8 +318,25 @@ export async function getClientForEdit(clientId: string) {
 }
 
 export async function upsertClient(input: ClientProfileInput, clientId?: string) {
-  const workshop = await requireCurrentWorkshop();
+  const { workshop } = await requireWorkshopOperation("clients.manage");
   const supabase = await createSupabaseDataClient();
+
+  if (clientId) {
+    const { data: existingClient, error: existingClientError } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("workshop_id", workshop.id)
+      .eq("id", clientId)
+      .maybeSingle();
+
+    if (existingClientError) {
+      throw new ClientDataError("No se pudo validar el cliente.", existingClientError);
+    }
+
+    if (!existingClient) {
+      throw new ClientInputError();
+    }
+  }
 
   const payload = {
     workshop_id: workshop.id,
@@ -321,7 +354,7 @@ export async function upsertClient(input: ClientProfileInput, clientId?: string)
   const { data, error } = await query.select("*").single();
 
   if (error) {
-    throw error;
+    throw new ClientDataError("No se pudo guardar el cliente.", error);
   }
 
   return data as ClientRecord;

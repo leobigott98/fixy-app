@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { upsertInventoryItem } from "@/lib/data/inventory";
+import { InventoryInputError, upsertInventoryItem } from "@/lib/data/inventory";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import {
   inventoryItemSchema,
   type InventoryItemFormValues,
@@ -24,17 +25,18 @@ export async function saveInventoryItemAction(
   values: InventoryItemFormValues,
   itemId?: string,
 ): Promise<SaveInventoryResult> {
-  const parsed = inventoryItemSchema.safeParse(values);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      message: "Revisa el repuesto antes de guardar.",
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
-  }
-
   try {
+    await requireWorkshopOperation("inventory.manage");
+    const parsed = inventoryItemSchema.safeParse(values);
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: "Revisa el repuesto antes de guardar.",
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
     const item = await upsertInventoryItem(parsed.data, itemId);
 
     revalidatePath("/app/inventory");
@@ -50,7 +52,10 @@ export async function saveInventoryItemAction(
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "No se pudo guardar el repuesto.",
+      message:
+        error instanceof InventoryInputError
+          ? error.message
+          : "No se pudo guardar el repuesto.",
     };
   }
 }

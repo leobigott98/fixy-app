@@ -59,6 +59,119 @@ export const permissionOptions = [
 
 export type AppPermission = (typeof permissionOptions)[number];
 
+export const workshopOperationMatrix = {
+  "workshop.manage": ["owner", "admin"],
+  "clients.view": ["owner", "admin", "recepcion", "finanzas"],
+  "clients.manage": ["owner", "admin", "recepcion", "finanzas"],
+  "vehicles.view": ["owner", "admin", "recepcion", "finanzas"],
+  "vehicles.manage": ["owner", "admin", "recepcion", "finanzas"],
+  "marketplace.view": ["owner", "admin", "recepcion", "finanzas"],
+  "marketplace.manage": ["owner", "admin", "recepcion", "finanzas"],
+  "quotes.view": ["owner", "admin", "recepcion", "finanzas"],
+  "quotes.manage": ["owner", "admin", "recepcion", "finanzas"],
+  "work_orders.manage": ["owner", "admin", "recepcion"],
+  "work_orders.view": ["owner", "admin", "recepcion", "mechanic"],
+  "work_orders.report": ["owner", "admin", "recepcion", "mechanic"],
+  "finances.view": ["owner", "admin", "finanzas"],
+  "payments.record": ["owner", "admin", "finanzas"],
+  "expenses.record": ["owner", "admin", "finanzas"],
+  "inventory.view": ["owner", "admin", "finanzas"],
+  "inventory.manage": ["owner", "admin", "finanzas"],
+  "inventory.sync_work_order_usage": ["owner", "admin", "recepcion", "finanzas"],
+  "suppliers.view": ["owner", "admin", "finanzas"],
+  "suppliers.manage": ["owner", "admin", "finanzas"],
+  "purchase_orders.view": ["owner", "admin", "finanzas"],
+  "purchase_orders.manage": ["owner", "admin", "finanzas"],
+} as const satisfies Record<string, readonly WorkshopRole[]>;
+
+export type WorkshopOperation = keyof typeof workshopOperationMatrix;
+
+export type WorkshopOperationSubject = {
+  role: WorkshopRole;
+  isActive: boolean;
+  mechanicId: string | null;
+};
+
+export type WorkshopOperationContext = {
+  assignedMechanicId?: string | null;
+};
+
+export type WorkshopOperationDenialReason =
+  | "anonymous"
+  | "inactive_member"
+  | "operation_not_configured"
+  | "role_not_allowed"
+  | "work_order_not_assigned";
+
+export type WorkshopOperationDecision =
+  | { allowed: true }
+  | { allowed: false; reason: WorkshopOperationDenialReason };
+
+const mechanicScopedOperations = new Set<WorkshopOperation>([
+  "work_orders.view",
+  "work_orders.report",
+]);
+
+export class WorkshopOperationDeniedError extends Error {
+  readonly operation: string;
+  readonly reason: WorkshopOperationDenialReason;
+
+  constructor(operation: string, reason: WorkshopOperationDenialReason) {
+    super("No tienes permiso para realizar esta operacion en el taller.");
+    this.name = "WorkshopOperationDeniedError";
+    this.operation = operation;
+    this.reason = reason;
+  }
+}
+
+export function getWorkshopOperationDecision(
+  subject: WorkshopOperationSubject | null,
+  operation: WorkshopOperation,
+  context: WorkshopOperationContext = {},
+): WorkshopOperationDecision {
+  if (!subject) {
+    return { allowed: false, reason: "anonymous" };
+  }
+
+  if (!subject.isActive) {
+    return { allowed: false, reason: "inactive_member" };
+  }
+
+  const allowedRoles = workshopOperationMatrix[operation] as readonly WorkshopRole[] | undefined;
+
+  if (!allowedRoles) {
+    return { allowed: false, reason: "operation_not_configured" };
+  }
+
+  if (!allowedRoles.includes(subject.role)) {
+    return { allowed: false, reason: "role_not_allowed" };
+  }
+
+  if (
+    subject.role === "mechanic" &&
+    mechanicScopedOperations.has(operation) &&
+    (!subject.mechanicId ||
+      !context.assignedMechanicId ||
+      subject.mechanicId !== context.assignedMechanicId)
+  ) {
+    return { allowed: false, reason: "work_order_not_assigned" };
+  }
+
+  return { allowed: true };
+}
+
+export function assertWorkshopOperationAllowed(
+  subject: WorkshopOperationSubject | null,
+  operation: WorkshopOperation,
+  context: WorkshopOperationContext = {},
+) {
+  const decision = getWorkshopOperationDecision(subject, operation, context);
+
+  if (!decision.allowed) {
+    throw new WorkshopOperationDeniedError(operation, decision.reason);
+  }
+}
+
 const roleModules: Record<AppRole, AppModuleKey[]> = {
   owner: [...workshopAppModuleOptions],
   admin: [...workshopAppModuleOptions],
