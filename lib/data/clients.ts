@@ -1,7 +1,10 @@
 import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import {
+  createSupabaseSessionClient,
+  isMissingRelationError,
+} from "@/lib/data/core";
 import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
 import type { ClientProfileInput } from "@/lib/clients/schema";
@@ -96,7 +99,7 @@ function normalizeSearchQuery(query?: string) {
 
 export async function getClientsList(search?: string): Promise<ClientListItem[]> {
   const { workshop } = await requireWorkshopOperation("clients.view");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const query = normalizeSearchQuery(search);
 
   let clientsQuery = supabase
@@ -210,7 +213,7 @@ export async function getClientsList(search?: string): Promise<ClientListItem[]>
 
 export async function getClientDetail(clientId: string): Promise<ClientDetailData> {
   const { workshop } = await requireWorkshopOperation("clients.view");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const { data: clientData, error: clientError } = await supabase
     .from("clients")
@@ -319,7 +322,7 @@ export async function getClientForEdit(clientId: string) {
 
 export async function upsertClient(input: ClientProfileInput, clientId?: string) {
   const { workshop } = await requireWorkshopOperation("clients.manage");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   if (clientId) {
     const { data: existingClient, error: existingClientError } = await supabase

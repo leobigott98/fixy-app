@@ -1,8 +1,11 @@
 import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import {
+  createSupabaseSessionClient,
+  isMissingRelationError,
+} from "@/lib/data/core";
+import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { getMechanicRoleLabel } from "@/lib/mechanics/constants";
 import type { MechanicProfileValues } from "@/lib/mechanics/schema";
 
@@ -60,12 +63,12 @@ function splitWorkOrdersByStatus(workOrders: WorkOrderLite[]) {
 }
 
 export async function getMechanicsList(search?: string): Promise<MechanicListItem[]> {
-  const workshop = await requireCurrentWorkshop();
-  const supabase = await createSupabaseDataClient();
+  const { workshop } = await requireWorkshopOperation("mechanics.view");
+  const supabase = await createSupabaseSessionClient();
   const query = normalizeSearchQuery(search);
 
   let mechanicsQuery = supabase
-    .from("mechanics")
+    .from("operation_mechanic_profiles")
     .select("*")
     .eq("workshop_id", workshop.id)
     .order("is_active", { ascending: false })
@@ -131,11 +134,11 @@ export async function getMechanicsList(search?: string): Promise<MechanicListIte
 }
 
 export async function getMechanicDetail(mechanicId: string): Promise<MechanicDetailData> {
-  const workshop = await requireCurrentWorkshop();
-  const supabase = await createSupabaseDataClient();
+  const { workshop } = await requireWorkshopOperation("mechanics.view");
+  const supabase = await createSupabaseSessionClient();
 
   const { data: mechanicData, error: mechanicError } = await supabase
-    .from("mechanics")
+    .from("operation_mechanic_profiles")
     .select("*")
     .eq("workshop_id", workshop.id)
     .eq("id", mechanicId)
@@ -184,8 +187,8 @@ export async function getMechanicForEdit(mechanicId: string) {
 }
 
 export async function upsertMechanic(values: MechanicProfileValues, mechanicId?: string) {
-  const workshop = await requireCurrentWorkshop();
-  const supabase = await createSupabaseDataClient();
+  const { workshop } = await requireWorkshopOperation("mechanics.manage");
+  const supabase = await createSupabaseSessionClient();
 
   const payload = {
     workshop_id: workshop.id,
@@ -201,18 +204,31 @@ export async function upsertMechanic(values: MechanicProfileValues, mechanicId?:
     ? supabase.from("mechanics").update(payload).eq("id", mechanicId).eq("workshop_id", workshop.id)
     : supabase.from("mechanics").insert(payload);
 
-  const { data, error } = await query.select("*").single();
+  const { data: mutationData, error } = await query.select("id").single();
 
   if (error) {
     throw error;
+  }
+
+  const savedMechanicId = (mutationData as { id: string }).id;
+  const savedQuery = supabase
+    .from("operation_mechanic_profiles")
+    .select("*")
+    .eq("workshop_id", workshop.id)
+    .eq("id", savedMechanicId);
+
+  const { data, error: savedError } = await savedQuery.maybeSingle();
+
+  if (savedError || !data) {
+    throw savedError ?? new Error("No se pudo recuperar el mecanico guardado.");
   }
 
   return data as MechanicRecord;
 }
 
 export async function getMechanicAssignmentOptions() {
-  const workshop = await requireCurrentWorkshop();
-  const supabase = await createSupabaseDataClient();
+  const { workshop } = await requireWorkshopOperation("mechanics.view");
+  const supabase = await createSupabaseSessionClient();
   const { data, error } = await supabase
     .from("mechanics")
     .select("id,full_name,role,is_active")

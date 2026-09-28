@@ -12,8 +12,11 @@ import {
   type AppointmentFormValues,
   type AppointmentInput,
 } from "@/lib/appointments/schema";
-import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
-import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
+import {
+  createSupabaseSessionClient,
+  isMissingRelationError,
+} from "@/lib/data/core";
+import { getCurrentWorkshopAccess, requireWorkshopOperation } from "@/lib/data/workshops";
 
 type ClientLite = {
   id: string;
@@ -194,13 +197,12 @@ function normalizeAppointmentRow(row: AppointmentRowWithRelations): AppointmentL
 }
 
 async function validateAppointmentRelations(input: AppointmentInput) {
-  const workshop = await requireCurrentWorkshop();
-  const access = await getCurrentWorkshopAccess();
-  const supabase = await createSupabaseDataClient();
+  const { workshop } = await requireWorkshopOperation("appointments.manage");
+  const supabase = await createSupabaseSessionClient();
 
   const [vehicleResult, mechanicResult] = await Promise.all([
     supabase
-      .from("vehicles")
+      .from("operation_vehicle_options")
       .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
       .eq("workshop_id", workshop.id)
       .eq("id", input.vehicleId)
@@ -243,27 +245,23 @@ async function validateAppointmentRelations(input: AppointmentInput) {
     throw new Error("El responsable seleccionado esta inactivo.");
   }
 
-  if (access?.role === "mechanic") {
-    throw new Error("Tu rol no puede editar citas.");
-  }
-
   return {
     workshop,
   };
 }
 
 export async function getAppointmentFormOptions(): Promise<AppointmentFormOptions> {
-  const workshop = await requireCurrentWorkshop();
-  const supabase = await createSupabaseDataClient();
+  const { workshop } = await requireWorkshopOperation("appointments.manage");
+  const supabase = await createSupabaseSessionClient();
 
   const [clientsResult, vehiclesResult, mechanicsResult] = await Promise.all([
     supabase
-      .from("clients")
+      .from("operation_client_options")
       .select("id,full_name,whatsapp_phone")
       .eq("workshop_id", workshop.id)
       .order("full_name"),
     supabase
-      .from("vehicles")
+      .from("operation_vehicle_options")
       .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
       .eq("workshop_id", workshop.id)
       .order("updated_at", { ascending: false }),
@@ -313,9 +311,13 @@ export async function getCalendarViewData(params: {
   selectedDate: string;
   scope: "day" | "week" | "month";
 }): Promise<CalendarViewData> {
-  const workshop = await requireCurrentWorkshop();
-  const access = await getCurrentWorkshopAccess();
-  const supabase = await createSupabaseDataClient();
+  const currentAccess = await getCurrentWorkshopAccess();
+  const access = await requireWorkshopOperation("appointments.view", {
+    assignedMechanicId:
+      currentAccess?.role === "mechanic" ? currentAccess.member?.mechanic_id : null,
+  });
+  const { workshop } = access;
+  const supabase = await createSupabaseSessionClient();
   const scopeDates = getScopeDates(params.selectedDate, params.scope);
 
   let calendarQuery = supabase
@@ -387,23 +389,15 @@ export async function getCalendarViewData(params: {
 }
 
 export async function getAppointmentForEdit(appointmentId: string) {
-  const workshop = await requireCurrentWorkshop();
-  const access = await getCurrentWorkshopAccess();
-  const supabase = await createSupabaseDataClient();
+  const access = await requireWorkshopOperation("appointments.manage");
+  const { workshop } = access;
+  const supabase = await createSupabaseSessionClient();
 
   let appointmentQuery = supabase
     .from("appointments")
     .select("*")
     .eq("workshop_id", workshop.id)
     .eq("id", appointmentId);
-
-  if (access?.role === "mechanic") {
-    if (!access.member?.mechanic_id) {
-      notFound();
-    }
-
-    appointmentQuery = appointmentQuery.eq("assigned_mechanic_id", access.member.mechanic_id);
-  }
 
   const { data, error } = await appointmentQuery.maybeSingle();
 
@@ -425,7 +419,7 @@ export async function getAppointmentForEdit(appointmentId: string) {
 export async function upsertAppointment(values: AppointmentFormValues, appointmentId?: string) {
   const input = normalizeAppointmentInput(values);
   const { workshop } = await validateAppointmentRelations(input);
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const payload = {
     workshop_id: workshop.id,

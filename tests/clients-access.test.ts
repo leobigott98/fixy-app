@@ -159,6 +159,13 @@ mock.module("@/lib/data/workshops", {
 
 mock.module("@/lib/data/core", {
   namedExports: {
+    async createSupabaseSessionClient() {
+      return {
+        from(table: string) {
+          return createQuery(table);
+        },
+      };
+    },
     async createSupabaseDataClient() {
       return {
         from(table: string) {

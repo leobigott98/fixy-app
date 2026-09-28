@@ -1,7 +1,10 @@
 import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import {
+  createSupabaseSessionClient,
+  isMissingRelationError,
+} from "@/lib/data/core";
 import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
 import { buildVehicleLabel, type VehicleProfileInput } from "@/lib/vehicles/schema";
@@ -169,7 +172,7 @@ async function replaceVehiclePhotos(
   workshopId: string,
   photoUrls: string[],
 ) {
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const { error: deleteError } = await supabase
     .from("vehicle_photos")
     .delete()
@@ -209,7 +212,7 @@ function normalizeHistoryItem<T extends WorkOrderHistoryItemRow>(item: T) {
 
 export async function getVehicleOwnerOptions() {
   const { workshop } = await requireWorkshopOperation("vehicles.view");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const { data, error } = await supabase
     .from("clients")
@@ -233,7 +236,7 @@ export async function getVehicleOwnerOptions() {
 
 export async function getVehiclesList(search?: string): Promise<VehicleListItem[]> {
   const { workshop } = await requireWorkshopOperation("vehicles.view");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const query = search?.trim() ?? "";
 
   let vehiclesQuery = supabase
@@ -329,7 +332,7 @@ export async function getVehiclesList(search?: string): Promise<VehicleListItem[
 
 export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetailData> {
   const { workshop } = await requireWorkshopOperation("vehicles.view");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const { data: vehicleData, error: vehicleError } = await supabase
     .from("vehicles")
@@ -498,7 +501,7 @@ export async function getVehicleForEdit(vehicleId: string) {
 
 export async function upsertVehicle(input: VehicleProfileInput, vehicleId?: string) {
   const { workshop } = await requireWorkshopOperation("vehicles.manage");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const { data: client, error: clientError } = await supabase
     .from("clients")

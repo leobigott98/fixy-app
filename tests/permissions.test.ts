@@ -109,3 +109,51 @@ test("el mecanico no puede registrar dinero", () => {
       error.reason === "role_not_allowed",
   );
 });
+
+test("jefe de taller gestiona operacion pero no clientes ni cotizaciones", () => {
+  const workshopLead: WorkshopOperationSubject = {
+    role: "jefe_taller",
+    isActive: true,
+    mechanicId: null,
+  };
+
+  doesNotThrow(() =>
+    assertWorkshopOperationAllowed(workshopLead, "work_orders.manage"),
+  );
+  doesNotThrow(() =>
+    assertWorkshopOperationAllowed(workshopLead, "mechanics.manage"),
+  );
+  throws(
+    () => assertWorkshopOperationAllowed(workshopLead, "clients.view"),
+    (error) =>
+      error instanceof WorkshopOperationDeniedError &&
+      error.reason === "role_not_allowed",
+  );
+});
+
+test("finanzas solo lee marketplace y citas", () => {
+  const financeMember: WorkshopOperationSubject = {
+    role: "finanzas",
+    isActive: true,
+    mechanicId: null,
+  };
+
+  doesNotThrow(() =>
+    assertWorkshopOperationAllowed(financeMember, "marketplace.view"),
+  );
+  doesNotThrow(() =>
+    assertWorkshopOperationAllowed(financeMember, "appointments.view"),
+  );
+  throws(
+    () => assertWorkshopOperationAllowed(financeMember, "marketplace.manage"),
+    (error) =>
+      error instanceof WorkshopOperationDeniedError &&
+      error.reason === "role_not_allowed",
+  );
+  throws(
+    () => assertWorkshopOperationAllowed(financeMember, "appointments.manage"),
+    (error) =>
+      error instanceof WorkshopOperationDeniedError &&
+      error.reason === "role_not_allowed",
+  );
+});

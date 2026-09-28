@@ -1,7 +1,10 @@
 import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import {
+  createSupabaseSessionClient,
+  isMissingRelationError,
+} from "@/lib/data/core";
 import { requireWorkshopOperation } from "@/lib/data/workshops";
 import { buildPublicQuoteDocumentPath, buildPublicQuotePath } from "@/lib/share-links";
 import {
@@ -209,7 +212,7 @@ export function getQuoteStatusVariant(status: QuoteRecord["status"]) {
 
 export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
   const { workshop } = await requireWorkshopOperation("quotes.view");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const [clientsResult, vehiclesResult, inventoryItemsResult] = await Promise.all([
     supabase
@@ -280,7 +283,7 @@ export async function getQuoteFormOptions(): Promise<QuoteFormOptions> {
 
 export async function getQuotesList(search?: string, view: "active" | "archived" = "active"): Promise<QuoteListItem[]> {
   const { workshop } = await requireWorkshopOperation("quotes.view");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const query = search?.trim() ?? "";
 
   let quotesQuery = supabase
@@ -358,7 +361,7 @@ export async function getQuotesList(search?: string, view: "active" | "archived"
 
 export async function getQuoteDetail(quoteId: string): Promise<QuoteDetailData> {
   const { workshop } = await requireWorkshopOperation("quotes.view");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const { data: quoteData, error: quoteError } = await supabase
     .from("quotes")
@@ -431,7 +434,7 @@ function formatQuoteItemsForInsert(quoteId: string, workshopId: string, items: Q
 }
 
 async function validateQuoteRelations(input: QuoteInput, workshopId: string) {
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const { data: clientData, error: clientError } = await supabase
     .from("clients")
@@ -608,7 +611,7 @@ export async function updateQuoteLifecycle(
   action: "archive" | "restore" | "delete",
 ) {
   const { workshop } = await requireWorkshopOperation("quotes.manage");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const now = new Date().toISOString();
 
   if (!(["archive", "restore", "delete"] as string[]).includes(action)) {
@@ -643,7 +646,7 @@ export async function updateQuoteLifecycle(
 
 export async function ensureQuotePublicShare(quoteId: string) {
   const { workshop } = await requireWorkshopOperation("quotes.manage");
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const { data: existingData, error: existingError } = await supabase
     .from("quotes")

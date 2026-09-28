@@ -1,10 +1,13 @@
 import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import {
+  createSupabaseSessionClient,
+  isMissingRelationError,
+} from "@/lib/data/core";
 import { getInventoryPartOptions, syncWorkOrderInventoryUsage } from "@/lib/data/inventory";
 import { getMechanicAssignmentOptions, type MechanicRecord } from "@/lib/data/mechanics";
-import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireWorkshopOperation } from "@/lib/data/workshops";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
 import { buildPublicWorkOrderDocumentPath, buildPublicWorkOrderPath } from "@/lib/share-links";
 import type { QuoteItemRecord, QuoteRecord } from "@/lib/data/quotes";
@@ -176,10 +179,6 @@ function toSingleRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
-function canManageWorkOrder(role?: string | null) {
-  return role !== "mechanic";
-}
-
 export function getWorkOrderStatusLabel(status: WorkOrderRecord["status"]) {
   switch (status) {
     case "presupuesto_pendiente":
@@ -277,19 +276,19 @@ function aggregateInventoryUsage(
 }
 
 async function validateWorkOrderRelations(input: WorkOrderInput) {
-  const workshop = await requireCurrentWorkshop();
-  const supabase = await createSupabaseDataClient();
+  const { workshop } = await requireWorkshopOperation("work_orders.manage");
+  const supabase = await createSupabaseSessionClient();
 
   const [vehicleResult, quoteResult, mechanicResult] = await Promise.all([
     supabase
-      .from("vehicles")
+      .from("operation_vehicle_options")
       .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
       .eq("workshop_id", workshop.id)
       .eq("id", input.vehicleId)
       .maybeSingle(),
     input.quoteId
       ? supabase
-          .from("quotes")
+          .from("operation_quote_options")
           .select("id,client_id,vehicle_id,title,status,total_amount")
           .eq("workshop_id", workshop.id)
           .eq("id", input.quoteId)
@@ -354,7 +353,7 @@ async function insertStatusHistory(
   toStatus: string,
   note?: string | null,
 ) {
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const { error } = await supabase.from("work_order_status_history").insert({
     work_order_id: workOrderId,
     workshop_id: workshopId,
@@ -374,7 +373,7 @@ async function replaceWorkOrderItems(
   services: WorkOrderInput["serviceItems"],
   parts: WorkOrderInput["partItems"],
 ) {
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   const [deleteServicesResult, deletePartsResult] = await Promise.all([
     supabase.from("work_order_services").delete().eq("work_order_id", workOrderId).eq("workshop_id", workshopId),
@@ -432,7 +431,7 @@ async function replaceReferencePhotos(
   workshopId: string,
   photoUrls: string[],
 ) {
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const { error: deleteError } = await supabase
     .from("work_order_reference_photos")
     .delete()
@@ -462,23 +461,22 @@ async function replaceReferencePhotos(
 }
 
 export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
-  const workshop = await requireCurrentWorkshop();
-  const access = await getCurrentWorkshopAccess();
-  const supabase = await createSupabaseDataClient();
-
-  if (!canManageWorkOrder(access?.role)) {
-    throw new Error("Tu rol no puede crear o editar ordenes.");
-  }
+  const { workshop } = await requireWorkshopOperation("work_orders.manage");
+  const supabase = await createSupabaseSessionClient();
 
   const [clientsResult, vehiclesResult, quotesResult, mechanics, inventoryItems] = await Promise.all([
-    supabase.from("clients").select("id,full_name").eq("workshop_id", workshop.id).order("full_name"),
     supabase
-      .from("vehicles")
+      .from("operation_client_options")
+      .select("id,full_name")
+      .eq("workshop_id", workshop.id)
+      .order("full_name"),
+    supabase
+      .from("operation_vehicle_options")
       .select("id,client_id,vehicle_label,plate,make,model,vehicle_year")
       .eq("workshop_id", workshop.id)
       .order("updated_at", { ascending: false }),
     supabase
-      .from("quotes")
+      .from("operation_quote_options")
       .select("id,client_id,vehicle_id,title")
       .eq("workshop_id", workshop.id)
       .eq("status", "approved")
@@ -530,9 +528,13 @@ export async function getWorkOrderFormOptions(): Promise<WorkOrderFormOptions> {
 }
 
 export async function getWorkOrdersList(search?: string): Promise<WorkOrderListItem[]> {
-  const workshop = await requireCurrentWorkshop();
-  const access = await getCurrentWorkshopAccess();
-  const supabase = await createSupabaseDataClient();
+  const currentAccess = await getCurrentWorkshopAccess();
+  const access = await requireWorkshopOperation("work_orders.view", {
+    assignedMechanicId:
+      currentAccess?.role === "mechanic" ? currentAccess.member?.mechanic_id : null,
+  });
+  const { workshop } = access;
+  const supabase = await createSupabaseSessionClient();
   const query = search?.trim().toLowerCase() ?? "";
 
   let workOrdersQuery = supabase
@@ -660,9 +662,13 @@ export async function getWorkOrdersBoardData(search?: string): Promise<WorkOrder
 }
 
 export async function getWorkOrderDetail(workOrderId: string): Promise<WorkOrderDetailData> {
-  const workshop = await requireCurrentWorkshop();
-  const access = await getCurrentWorkshopAccess();
-  const supabase = await createSupabaseDataClient();
+  const currentAccess = await getCurrentWorkshopAccess();
+  const access = await requireWorkshopOperation("work_orders.view", {
+    assignedMechanicId:
+      currentAccess?.role === "mechanic" ? currentAccess.member?.mechanic_id : null,
+  });
+  const { workshop } = access;
+  const supabase = await createSupabaseSessionClient();
 
   let workOrderQuery = supabase
     .from("work_orders")
@@ -758,14 +764,10 @@ export async function getWorkOrderForEdit(workOrderId: string) {
 
 export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrderId?: string) {
   const input = normalizeWorkOrderInput(inputValues);
-  const access = await getCurrentWorkshopAccess();
-
-  if (!canManageWorkOrder(access?.role)) {
-    throw new Error("Tu rol no puede editar ordenes.");
-  }
+  await requireWorkshopOperation("work_orders.manage");
 
   const { workshop, vehicle, quote, mechanic } = await validateWorkOrderRelations(input);
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   let existingWorkOrder: Pick<WorkOrderRecord, "status" | "code" | "completed_at"> | null = null;
   let previousPartUsage: Record<string, number> = {};
@@ -853,13 +855,8 @@ export async function upsertWorkOrder(inputValues: WorkOrderFormValues, workOrde
 }
 
 export async function updateWorkOrderStatus(workOrderId: string, status: WorkOrderRecord["status"]) {
-  const workshop = await requireCurrentWorkshop();
-  const access = await getCurrentWorkshopAccess();
-  const supabase = await createSupabaseDataClient();
-
-  if (!canManageWorkOrder(access?.role)) {
-    throw new Error("Tu rol no puede mover etapas.");
-  }
+  const { workshop } = await requireWorkshopOperation("work_orders.manage");
+  const supabase = await createSupabaseSessionClient();
 
   const [{ data: existingData, error: existingError }, { data: existingPartsData, error: existingPartsError }] = await Promise.all([
     supabase
@@ -931,13 +928,8 @@ export async function updateWorkOrderStatus(workOrderId: string, status: WorkOrd
 }
 
 export async function createWorkOrderFromApprovedQuote(quoteId: string) {
-  const workshop = await requireCurrentWorkshop();
-  const access = await getCurrentWorkshopAccess();
-  const supabase = await createSupabaseDataClient();
-
-  if (!canManageWorkOrder(access?.role)) {
-    throw new Error("Tu rol no puede crear ordenes desde presupuestos.");
-  }
+  const { workshop } = await requireWorkshopOperation("work_orders.manage");
+  const supabase = await createSupabaseSessionClient();
 
   const existingLinkedWorkOrderResult = await supabase
     .from("work_orders")
@@ -1074,8 +1066,8 @@ export async function createWorkOrderFromApprovedQuote(quoteId: string) {
 }
 
 export async function ensureWorkOrderPublicShare(workOrderId: string) {
-  const workshop = await requireCurrentWorkshop();
-  const supabase = await createSupabaseDataClient();
+  const { workshop } = await requireWorkshopOperation("work_orders.manage");
+  const supabase = await createSupabaseSessionClient();
 
   const { data: existingData, error: existingError } = await supabase
     .from("work_orders")

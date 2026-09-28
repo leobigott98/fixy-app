@@ -1,4 +1,9 @@
-import { createSupabaseDataClient, isMissingRelationError } from "@/lib/data/core";
+import {
+  createSupabaseDataClient,
+  createSupabaseSessionClient,
+  isMissingRelationError,
+} from "@/lib/data/core";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   marketplaceInquirySchema,
   marketplaceReviewSchema,
@@ -439,7 +444,9 @@ export async function createMarketplaceInquiry(
     throw new MarketplaceInputError("workshop_not_available");
   }
 
-  const supabase = await createSupabaseDataClient();
+  // Anonymous intake is validated on the server and intentionally enters
+  // through this narrow administrative path; anon has no table privileges.
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("marketplace_inquiries")
     .insert({
@@ -488,7 +495,7 @@ export async function createMarketplaceInquiry(
 
 export async function getWorkshopNotificationCount(workshopId: string) {
   const workshop = await requireMarketplaceWorkshop("marketplace.view", workshopId);
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const { count, error } = await supabase
     .from("marketplace_inquiries")
     .select("*", { count: "exact", head: true })
@@ -508,7 +515,7 @@ export async function getWorkshopNotificationCount(workshopId: string) {
 
 export async function getWorkshopNotifications(workshopId: string) {
   const workshop = await requireMarketplaceWorkshop("marketplace.view", workshopId);
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const { data, error } = await supabase
     .from("marketplace_inquiries")
     .select("*")
@@ -602,7 +609,7 @@ export async function getWorkshopNotifications(workshopId: string) {
 
 export async function markMarketplaceInquiryAsContacted(inquiryId: string, workshopId: string) {
   const workshop = await requireMarketplaceWorkshop("marketplace.manage", workshopId);
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const { data, error } = await supabase
     .from("marketplace_inquiries")
     .update({ status: "contacted" })
@@ -630,7 +637,7 @@ async function findOrCreateClientFromOwnerRequest(params: {
   requesterPhone: string;
   requesterEmail?: string | null;
 }) {
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const normalizedPhone = normalizeSessionPhone(params.requesterPhone);
   const { data: existingClient, error: existingClientError } = await supabase
     .from("clients")
@@ -682,7 +689,7 @@ async function findOrCreateVehicleFromOwnerRequest(params: {
   clientId: string;
   ownerVehicle: OwnerVehicleRow;
 }) {
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
 
   if (params.ownerVehicle.plate) {
     const { data: existingVehicle, error: existingVehicleError } = await supabase
@@ -736,7 +743,7 @@ async function findOrCreateVehicleFromOwnerRequest(params: {
 
 export async function confirmAndScheduleMarketplaceInquiry(inquiryId: string, workshopId: string) {
   const currentWorkshop = await requireMarketplaceWorkshop("marketplace.manage", workshopId);
-  const supabase = await createSupabaseDataClient();
+  const supabase = await createSupabaseSessionClient();
   const { data: inquiryData, error: inquiryError } = await supabase
     .from("marketplace_inquiries")
     .select("*")

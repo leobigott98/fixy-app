@@ -12,3 +12,11 @@ export async function createSupabaseDataClient() {
 
   return createSupabaseServerClient();
 }
+
+/**
+ * Client for ordinary user-authorized data access. This deliberately never
+ * selects service_role, so the session JWT reaches Postgres and RLS applies.
+ */
+export async function createSupabaseSessionClient() {
+  return createSupabaseServerClient();
+}

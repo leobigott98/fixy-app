@@ -187,6 +187,13 @@ mock.module("@/lib/data/workshops", {
 
 mock.module("@/lib/data/core", {
   namedExports: {
+    async createSupabaseSessionClient() {
+      return {
+        from(table: string) {
+          return createQuery(table);
+        },
+      };
+    },
     async createSupabaseDataClient() {
       return {
         from(table: string) {
@@ -280,7 +287,7 @@ test("una invocacion directa de miembro inactivo falla cerrada", async () => {
 
 test("taller, solicitud y resena de otro taller no se pueden usar", async () => {
   currentSubject = {
-    role: "finanzas",
+    role: "recepcion",
     isActive: true,
     mechanicId: null,
   };
@@ -305,9 +312,9 @@ test("taller, solicitud y resena de otro taller no se pueden usar", async () => 
   equal(updatedReviewIds.length, 0);
 });
 
-test("finanzas autorizado puede leer y gestionar marketplace del taller", async () => {
+test("recepcion autorizada puede leer y gestionar marketplace del taller", async () => {
   currentSubject = {
-    role: "finanzas",
+    role: "recepcion",
     isActive: true,
     mechanicId: null,
   };
