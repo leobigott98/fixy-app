@@ -26,7 +26,8 @@ import {
   getWorkOrderEditHref,
   getWorkOrderStatusLabel,
 } from "@/lib/data/work-orders";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
+import { canViewWorkOrderPrices } from "@/lib/permissions";
 import { formatCurrencyDisplay } from "@/lib/utils";
 import {
   buildPaymentReminderMessage,
@@ -44,6 +45,9 @@ type WorkOrderDetailPageProps = {
 
 export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPageProps) {
   const workshop = await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
+  const showPrices = access ? canViewWorkOrderPrices(access.role) : false;
+  const canManageOrders = access?.role !== "mechanic";
   const { id } = await params;
   const detail = await getWorkOrderDetail(id);
   const { workOrder, client, vehicle, quote, services, parts, statusHistory, paymentSummary } =
@@ -98,22 +102,23 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
         title={workOrder.title}
         description="Detalle operativo de la orden con estado visible, items separados, responsable y trazabilidad de avance."
         status={getWorkOrderStatusLabel(workOrder.status)}
-        action={{
+        action={canManageOrders ? {
           label: "Editar orden",
           icon: <SquarePen className="size-4" />,
           href: getWorkOrderEditHref(workOrder.id),
-        }}
+        } : undefined}
       />
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button asChild variant="outline">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 md:flex-row">
+          <Button asChild variant="outline">
           <Link href={`/app/work-orders/${workOrder.id}/document` as Route}>
             <FileText className="size-4" />
             PDF / Imprimir
           </Link>
         </Button>
         <WhatsAppLinkButton href={statusUpdateHref} label="Enviar actualizacion" variant="outline" />
-        <WhatsAppLinkButton href={readyForPickupHref} label="Listo para entregar" variant="outline" />
+        {showPrices ? <WhatsAppLinkButton href={readyForPickupHref} label="Listo para entregar" variant="outline" /> : null}
         {client ? (
           <Button asChild variant="outline">
             <Link href={`/app/clients/${client.id}` as Route}>
@@ -130,7 +135,9 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
             </Link>
           </Button>
         ) : null}
-        {quote ? (
+        </div>
+        <div className="flex flex-col gap-3 md:flex-row">
+          {quote && showPrices ? (
           <Button asChild variant="outline">
             <Link href={`/app/quotes/${quote.id}` as Route}>
               <ClipboardList className="size-4" />
@@ -138,16 +145,19 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
             </Link>
           </Button>
         ) : null}
-        <Button asChild variant="primary">
-          <Link href={`/app/finances/payments/new?clientId=${client?.id ?? ""}&workOrderId=${workOrder.id}` as Route}>
-            <Coins className="size-4" />
-            Registrar pago
-          </Link>
-        </Button>
-        <WhatsAppLinkButton href={paymentReminderHref} label="Recordar pago" variant="primary" />
+          {showPrices ? (
+            <Button asChild variant="primary">
+              <Link href={`/app/finances/payments/new?clientId=${client?.id ?? ""}&workOrderId=${workOrder.id}` as Route}>
+                <Coins className="size-4" />
+                Registrar pago
+              </Link>
+            </Button>
+          ) : null}
+          {showPrices ? <WhatsAppLinkButton href={paymentReminderHref} label="Recordar pago" variant="primary" /> : null}
+        </div>
       </div>
 
-      <Card className="bg-white/86">
+      {canManageOrders ? <Card className="bg-white/86">
         <CardHeader>
           <CardTitle>Compartir seguimiento con cliente</CardTitle>
           <CardDescription>
@@ -157,16 +167,18 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
         <CardContent>
           <ClientShareTools kind="workOrder" resourceId={workOrder.id} />
         </CardContent>
-      </Card>
+      </Card> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Codigo" value={workOrder.code || "Sin codigo"} />
         <Metric label="Servicios" value={String(services.length)} />
         <Metric label="Repuestos" value={String(parts.length)} />
-        <Metric
-          label="Total"
-          value={formatCurrencyDisplay(workOrder.total_amount, workshop.preferred_currency)}
-        />
+        {showPrices ? (
+          <Metric
+            label="Total"
+            value={formatCurrencyDisplay(workOrder.total_amount, workshop.preferred_currency)}
+          />
+        ) : null}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
@@ -208,7 +220,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
               label="Promesa de entrega"
               value={workOrder.promised_date || "Sin fecha"}
             />
-            <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
+            {canManageOrders ? <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
               <div className="text-sm font-medium text-[var(--foreground)]">Mover etapa</div>
               <div className="mt-3">
                 <WorkOrderStatusControl
@@ -216,7 +228,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
                   workOrderId={workOrder.id}
                 />
               </div>
-            </div>
+            </div> : null}
             <div className="rounded-2xl border border-[var(--line)] bg-[rgba(249,115,22,0.04)] p-4">
               <div className="text-sm font-medium text-[var(--foreground)]">Notas</div>
               <div className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -225,12 +237,12 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <WhatsAppLinkButton href={statusUpdateHref} label="Actualizar por WhatsApp" variant="outline" />
-              <WhatsAppLinkButton href={readyForPickupHref} label="Avisar entrega" variant="outline" />
+              {showPrices ? <WhatsAppLinkButton href={readyForPickupHref} label="Avisar entrega" variant="outline" /> : null}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="mesh-panel subtle-grid text-white">
+        {showPrices ? <Card className="mesh-panel subtle-grid text-white">
           <CardHeader>
             <Badge variant="dark">Resumen operativo</Badge>
             <CardTitle className="text-white">Costo y lectura rapida</CardTitle>
@@ -274,7 +286,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card> : null}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -282,12 +294,14 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
           currency={workshop.preferred_currency}
           emptyText="Todavia no hay servicios cargados en esta orden."
           items={services}
+          showPrices={showPrices}
           title="Servicios"
         />
         <ItemsCard
           currency={workshop.preferred_currency}
           emptyText="Todavia no hay repuestos cargados en esta orden."
           items={parts}
+          showPrices={showPrices}
           title="Repuestos usados"
         />
       </div>
@@ -321,7 +335,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-        <Card className="bg-white/86">
+        {showPrices ? <Card className="bg-white/86">
           <CardHeader>
             <CardTitle>Historial de estados</CardTitle>
             <CardDescription>
@@ -357,7 +371,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card> : null}
 
         <Card className="bg-white/86">
           <CardHeader>
@@ -444,6 +458,7 @@ function ItemsCard({
   items,
   emptyText,
   currency,
+  showPrices,
 }: {
   title: string;
   items: Array<{
@@ -455,6 +470,7 @@ function ItemsCard({
   }>;
   emptyText: string;
   currency: "USD" | "VES" | "USD_VES";
+  showPrices: boolean;
 }) {
   return (
     <Card className="bg-white/86">
@@ -469,8 +485,8 @@ function ItemsCard({
               <div className="font-medium">{item.description}</div>
               <div className="mt-2 flex flex-wrap gap-3 text-sm text-[var(--muted)]">
                 <span>Cant: {item.quantity}</span>
-                <span>Unit: {formatCurrencyDisplay(Number(item.unit_price ?? 0), currency)}</span>
-                <span>Total: {formatCurrencyDisplay(Number(item.line_total ?? 0), currency)}</span>
+                {showPrices ? <span>Unit: {formatCurrencyDisplay(Number(item.unit_price ?? 0), currency)}</span> : null}
+                {showPrices ? <span>Total: {formatCurrencyDisplay(Number(item.line_total ?? 0), currency)}</span> : null}
               </div>
             </div>
           ))

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/auth/session";
 import {
   isEmailIdentifier,
+  isAlreadyRegisteredAuthError,
   normalizeLoginIdentifier,
   normalizeSessionEmail,
   normalizeSessionPhone,
@@ -353,10 +354,6 @@ function getResetPasswordRedirectTo(origin?: string | null) {
   return new URL("/reset-password", origin).toString();
 }
 
-function isAlreadyRegisteredAuthError(message: string) {
-  return /already registered|already been registered|already exists|exists/i.test(message);
-}
-
 function buildInviteAuthMetadata(params: {
   fullName: string;
   role: WorkshopRole;
@@ -432,11 +429,14 @@ async function ensureAuthUserForInvite(params: {
       user_metadata: buildInviteAuthMetadata(params),
     });
 
-    if (error && !/already registered|exists/i.test(error.message)) {
+    if (error && !isAlreadyRegisteredAuthError(error.message)) {
       throw error;
     }
   } catch (error) {
-    if (error instanceof Error && /already registered|exists/i.test(error.message)) {
+    if (
+      error instanceof Error &&
+      isAlreadyRegisteredAuthError(error.message)
+    ) {
       return;
     }
 

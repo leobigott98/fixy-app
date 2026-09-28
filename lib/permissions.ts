@@ -242,6 +242,10 @@ export function getRolePermissions(role: WorkshopRole) {
   return rolePermissions[role];
 }
 
+export function canViewWorkOrderPrices(role: WorkshopRole) {
+  return role !== "mechanic";
+}
+
 export function getRoleHomePath(role: AppRole) {
   switch (role) {
     case "car_owner":

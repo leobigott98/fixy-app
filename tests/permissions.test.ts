@@ -1,8 +1,10 @@
-import { doesNotThrow, throws } from "node:assert/strict";
+import { doesNotThrow, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
   assertWorkshopOperationAllowed,
+  canViewWorkOrderPrices,
+  hasModuleAccess,
   WorkshopOperationDeniedError,
   type WorkshopOperationSubject,
 } from "@/lib/permissions";
@@ -108,6 +110,20 @@ test("el mecanico no puede registrar dinero", () => {
       error instanceof WorkshopOperationDeniedError &&
       error.reason === "role_not_allowed",
   );
+});
+
+test("las vistas autenticadas no muestran precios al mecanico", () => {
+  equal(canViewWorkOrderPrices("mechanic"), false);
+  equal(canViewWorkOrderPrices("owner"), true);
+  equal(canViewWorkOrderPrices("admin"), true);
+  equal(canViewWorkOrderPrices("finanzas"), true);
+});
+
+test("el shell del mecanico carga sus modulos sin consultar notificaciones", () => {
+  equal(hasModuleAccess("mechanic", "dashboard"), true);
+  equal(hasModuleAccess("mechanic", "work_orders"), true);
+  equal(hasModuleAccess("mechanic", "calendar"), true);
+  equal(hasModuleAccess("mechanic", "notifications"), false);
 });
 
 test("jefe de taller gestiona operacion pero no clientes ni cotizaciones", () => {

@@ -41,6 +41,12 @@ export function normalizeLoginIdentifier(identifier: string) {
     : normalizeSessionPhone(trimmed);
 }
 
+export function isAlreadyRegisteredAuthError(message: string) {
+  return /already(?:\s+been)?\s+registered|already\s+exists|\bexists\b/i.test(
+    message,
+  );
+}
+
 export function getDisplayNameFromEmail(email: string) {
   const [localPart] = normalizeSessionEmail(email).split("@");
 

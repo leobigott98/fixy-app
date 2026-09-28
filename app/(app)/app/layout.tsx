@@ -7,7 +7,7 @@ import { requireAppSession } from "@/lib/auth/session";
 import { getCurrentCarOwnerProfile } from "@/lib/data/car-owners";
 import { getWorkshopNotificationCount } from "@/lib/data/marketplace";
 import { getCurrentWorkshopAccess } from "@/lib/data/workshops";
-import { getRoleLabel, type AppRole } from "@/lib/permissions";
+import { getRoleLabel, hasModuleAccess, type AppRole } from "@/lib/permissions";
 
 type AppLayoutProps = {
   children: ReactNode;
@@ -25,7 +25,10 @@ export default async function AppLayout({ children }: AppLayoutProps) {
   }
 
   const roleLabel = access ? getRoleLabel(access.role) : getRoleLabel(role);
-  const notificationCount = workshop ? await getWorkshopNotificationCount(workshop.id) : 0;
+  const notificationCount =
+    workshop && hasModuleAccess(role, "notifications")
+      ? await getWorkshopNotificationCount(workshop.id)
+      : 0;
 
   return (
     <ProtectedAppShell

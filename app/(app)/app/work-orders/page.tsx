@@ -19,7 +19,8 @@ import {
   type WorkOrderListItem,
   type WorkOrderRecord,
 } from "@/lib/data/work-orders";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
+import { canViewWorkOrderPrices } from "@/lib/permissions";
 import { formatCurrencyDisplay } from "@/lib/utils";
 import { getPreferredWorkOrdersView } from "@/lib/view-preferences";
 
@@ -67,6 +68,9 @@ function getBoardColumnDescription(status: WorkOrderRecord["status"]) {
 
 export default async function WorkOrdersPage({ searchParams }: WorkOrdersPageProps) {
   const workshop = await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
+  const showPrices = access ? canViewWorkOrderPrices(access.role) : false;
+  const canManageOrders = access?.role !== "mechanic";
   const params = await searchParams;
   const query = getQueryValue(params.q);
   const view = await getPreferredWorkOrdersView(getQueryValue(params.view));
@@ -87,11 +91,11 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
         title="Ordenes de trabajo"
         description="Board visual para mover el taller rapido, entender carga activa y seguir cada vehiculo sin perder contexto."
         status="Sprint 4"
-        action={{
+        action={canManageOrders ? {
           label: "Nueva Orden",
           icon: <FilePlus2 className="size-4" />,
           href: "/app/work-orders/new" as Route,
-        }}
+        } : undefined}
       />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_auto]">
@@ -124,12 +128,14 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
             ]}
           />
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="primary">
-              <Link href={"/app/work-orders/new" as Route}>
-                <FilePlus2 className="size-4" />
-                Nueva Orden
-              </Link>
-            </Button>
+            {canManageOrders ? (
+              <Button asChild variant="primary">
+                <Link href={"/app/work-orders/new" as Route}>
+                  <FilePlus2 className="size-4" />
+                  Nueva Orden
+                </Link>
+              </Button>
+            ) : null}
             <div className="rounded-full bg-[rgba(249,115,22,0.1)] px-4 py-3 text-xs font-semibold text-[var(--primary-strong)]">
               No necesitas presupuesto primero
             </div>
@@ -165,8 +171,10 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
                     {boardData.grouped[status].length ? (
                       boardData.grouped[status].map((workOrder) => (
                         <BoardCard
+                          canManage={canManageOrders}
                           currency={workshop.preferred_currency}
                           key={workOrder.id}
+                          showPrices={showPrices}
                           workOrder={workOrder}
                         />
                       ))
@@ -193,7 +201,7 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
                       <th className="px-5 py-4 font-semibold">Etapa</th>
                       <th className="px-5 py-4 font-semibold">Responsable</th>
                       <th className="px-5 py-4 font-semibold">Promesa</th>
-                      <th className="px-5 py-4 font-semibold">Total</th>
+                      {showPrices ? <th className="px-5 py-4 font-semibold">Total</th> : null}
                       <th className="px-5 py-4 font-semibold">Acciones</th>
                     </tr>
                   </thead>
@@ -211,17 +219,21 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
                         </td>
                         <td className="px-5 py-4">{workOrder.assignedMechanicName || "Sin responsable"}</td>
                         <td className="px-5 py-4">{workOrder.promised_date || "Sin fecha"}</td>
-                        <td className="px-5 py-4 font-semibold">
-                          {formatCurrencyDisplay(workOrder.total_amount, workshop.preferred_currency)}
-                        </td>
+                        {showPrices ? (
+                          <td className="px-5 py-4 font-semibold">
+                            {formatCurrencyDisplay(workOrder.total_amount, workshop.preferred_currency)}
+                          </td>
+                        ) : null}
                         <td className="px-5 py-4">
                           <div className="flex flex-wrap gap-2">
-                            <Button asChild size="sm" variant="outline">
-                              <Link href={getWorkOrderEditHref(workOrder.id)}>
-                                <SquarePen className="size-4" />
-                                Editar
-                              </Link>
-                            </Button>
+                            {canManageOrders ? (
+                              <Button asChild size="sm" variant="outline">
+                                <Link href={getWorkOrderEditHref(workOrder.id)}>
+                                  <SquarePen className="size-4" />
+                                  Editar
+                                </Link>
+                              </Button>
+                            ) : null}
                             <Button asChild size="sm" variant="primary">
                               <Link href={getWorkOrderDetailHref(workOrder.id)}>Ver detalle</Link>
                             </Button>
@@ -238,8 +250,10 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
           <div className="grid gap-4 xl:grid-cols-2">
             {workOrders.map((workOrder) => (
               <ListCard
+                canManage={canManageOrders}
                 currency={workshop.preferred_currency}
                 key={workOrder.id}
+                showPrices={showPrices}
                 workOrder={workOrder}
               />
             ))}
@@ -300,9 +314,13 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function BoardCard({
   workOrder,
   currency,
+  showPrices,
+  canManage,
 }: {
   workOrder: WorkOrderListItem;
   currency: "USD" | "VES" | "USD_VES";
+  showPrices: boolean;
+  canManage: boolean;
 }) {
   return (
     <div className="space-y-4 rounded-[24px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4">
@@ -316,11 +334,13 @@ function BoardCard({
             {workOrder.title}
           </Link>
         </div>
-        <Button asChild size="icon" variant="ghost">
-          <Link href={getWorkOrderEditHref(workOrder.id)}>
-            <SquarePen className="size-4" />
-          </Link>
-        </Button>
+        {canManage ? (
+          <Button asChild size="icon" variant="ghost">
+            <Link href={getWorkOrderEditHref(workOrder.id)}>
+              <SquarePen className="size-4" />
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
       <div className="space-y-2 text-sm text-[var(--muted)]">
@@ -335,14 +355,16 @@ function BoardCard({
         <Badge>{workOrder.partCount} repuestos</Badge>
       </div>
 
-      <div className="rounded-2xl bg-white/80 p-4">
-        <div className="text-sm text-[var(--muted)]">Total</div>
-        <div className="mt-2 font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
-          {formatCurrencyDisplay(workOrder.total_amount, currency)}
+      {showPrices ? (
+        <div className="rounded-2xl bg-white/80 p-4">
+          <div className="text-sm text-[var(--muted)]">Total</div>
+          <div className="mt-2 font-[family-name:var(--font-heading)] text-3xl font-bold tracking-tight">
+            {formatCurrencyDisplay(workOrder.total_amount, currency)}
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      <WorkOrderStatusControl compact currentStatus={workOrder.status} workOrderId={workOrder.id} />
+      {canManage ? <WorkOrderStatusControl compact currentStatus={workOrder.status} workOrderId={workOrder.id} /> : null}
     </div>
   );
 }
@@ -350,9 +372,13 @@ function BoardCard({
 function ListCard({
   workOrder,
   currency,
+  showPrices,
+  canManage,
 }: {
   workOrder: WorkOrderListItem;
   currency: "USD" | "VES" | "USD_VES";
+  showPrices: boolean;
+  canManage: boolean;
 }) {
   return (
     <Card className="bg-white/86">
@@ -377,11 +403,13 @@ function ListCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button asChild size="icon" variant="outline">
-              <Link href={getWorkOrderEditHref(workOrder.id)}>
-                <SquarePen className="size-4" />
-              </Link>
-            </Button>
+            {canManage ? (
+              <Button asChild size="icon" variant="outline">
+                <Link href={getWorkOrderEditHref(workOrder.id)}>
+                  <SquarePen className="size-4" />
+                </Link>
+              </Button>
+            ) : null}
             <Button asChild variant="primary">
               <Link href={getWorkOrderDetailHref(workOrder.id)}>Ver detalle</Link>
             </Button>
@@ -391,11 +419,13 @@ function ListCard({
         <div className="grid gap-3 sm:grid-cols-3">
           <InfoMetric label="Responsable" value={workOrder.assignedMechanicName || "Sin asignar"} />
           <InfoMetric label="Promesa" value={workOrder.promised_date || "Sin fecha"} />
-          <InfoMetric
-            label="Total"
-            value={formatCurrencyDisplay(workOrder.total_amount, currency)}
-            strong
-          />
+          {showPrices ? (
+            <InfoMetric
+              label="Total"
+              value={formatCurrencyDisplay(workOrder.total_amount, currency)}
+              strong
+            />
+          ) : null}
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -410,7 +440,7 @@ function ListCard({
           </div>
         ) : null}
 
-        <WorkOrderStatusControl currentStatus={workOrder.status} workOrderId={workOrder.id} />
+        {canManage ? <WorkOrderStatusControl currentStatus={workOrder.status} workOrderId={workOrder.id} /> : null}
       </CardContent>
     </Card>
   );

@@ -10,7 +10,8 @@ import {
 } from "@/components/documents/document-shell";
 import { Button } from "@/components/ui/button";
 import { getWorkOrderDetail, getWorkOrderStatusLabel } from "@/lib/data/work-orders";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
+import { canViewWorkOrderPrices } from "@/lib/permissions";
 import { formatCurrencyDisplay } from "@/lib/utils";
 
 type WorkOrderDocumentPageProps = {
@@ -21,6 +22,8 @@ type WorkOrderDocumentPageProps = {
 
 export default async function WorkOrderDocumentPage({ params }: WorkOrderDocumentPageProps) {
   const workshop = await requireCurrentWorkshop();
+  const access = await getCurrentWorkshopAccess();
+  const showPrices = access ? canViewWorkOrderPrices(access.role) : false;
   const { id } = await params;
   const detail = await getWorkOrderDetail(id);
   const currencyPrefix = workshop.preferred_currency === "VES" ? "Bs. " : "$";
@@ -74,7 +77,7 @@ export default async function WorkOrderDocumentPage({ params }: WorkOrderDocumen
       <div className="grid gap-6 xl:grid-cols-2">
         <DocumentSection title="Servicios">
           {detail.services.length ? (
-            <DocumentItemsTable currency={currencyPrefix} items={detail.services} typeLabel="Servicio" />
+            showPrices ? <DocumentItemsTable currency={currencyPrefix} items={detail.services} typeLabel="Servicio" /> : <OperationalItems items={detail.services} />
           ) : (
             <div className="rounded-[22px] border border-dashed border-[var(--line)] bg-white/80 p-4 text-sm text-[var(--muted)]">
               Sin servicios cargados.
@@ -83,7 +86,7 @@ export default async function WorkOrderDocumentPage({ params }: WorkOrderDocumen
         </DocumentSection>
         <DocumentSection title="Repuestos">
           {detail.parts.length ? (
-            <DocumentItemsTable currency={currencyPrefix} items={detail.parts} typeLabel="Repuesto" />
+            showPrices ? <DocumentItemsTable currency={currencyPrefix} items={detail.parts} typeLabel="Repuesto" /> : <OperationalItems items={detail.parts} />
           ) : (
             <div className="rounded-[22px] border border-dashed border-[var(--line)] bg-white/80 p-4 text-sm text-[var(--muted)]">
               Sin repuestos cargados.
@@ -98,7 +101,7 @@ export default async function WorkOrderDocumentPage({ params }: WorkOrderDocumen
             {detail.workOrder.notes || "Sin notas adicionales."}
           </div>
         </DocumentSection>
-        <DocumentSection title="Resumen economico">
+        {showPrices ? <DocumentSection title="Resumen economico">
           <DocumentInfoGrid
             items={[
               {
@@ -125,8 +128,21 @@ export default async function WorkOrderDocumentPage({ params }: WorkOrderDocumen
               },
             ]}
           />
-        </DocumentSection>
+        </DocumentSection> : null}
       </div>
     </DocumentShell>
+  );
+}
+
+function OperationalItems({ items }: { items: Array<{ id: string; description: string; quantity: number }> }) {
+  return (
+    <div className="space-y-2">
+      {items.map((item) => (
+        <div className="rounded-[22px] border border-[var(--line)] bg-white/80 p-4 text-sm" key={item.id}>
+          <div className="font-medium">{item.description}</div>
+          <div className="mt-1 text-[var(--muted)]">Cantidad: {item.quantity}</div>
+        </div>
+      ))}
+    </div>
   );
 }
