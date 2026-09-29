@@ -42,5 +42,8 @@ test("calculateQuoteTotals suma mano de obra y repuestos", () => {
     partsSubtotal: 49.99,
     subtotal: 205.49,
     total: 205.49,
+    discountAmount: 0,
+    taxableBase: 205.49,
+    taxAmount: null,
   });
 });

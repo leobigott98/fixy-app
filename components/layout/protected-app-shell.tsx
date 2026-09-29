@@ -40,7 +40,7 @@ export function ProtectedAppShell({
   }
 
   return (
-    <div className="min-h-screen lg:flex">
+    <div className="protected-app-shell min-h-screen lg:flex">
       <AppSidebar
         notificationCount={notificationCount}
         role={role}
@@ -49,7 +49,7 @@ export function ProtectedAppShell({
         workshopName={workshopName}
         userName={userName}
       />
-      <div className="flex min-h-screen flex-1 flex-col px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-8 lg:pt-6">
+      <div className="protected-app-content flex min-h-screen flex-1 flex-col px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-8 lg:pt-6">
         <AppTopbar
           notificationCount={notificationCount}
           role={role}
@@ -58,7 +58,7 @@ export function ProtectedAppShell({
           userName={userName}
           workshopName={workshopName ?? "Configura tu taller"}
         />
-        <div className="pt-6">{children}</div>
+        <div className="protected-app-main pt-6">{children}</div>
       </div>
       <MobileNav notificationCount={notificationCount} role={role} />
     </div>

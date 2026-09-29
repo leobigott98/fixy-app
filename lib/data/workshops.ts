@@ -41,6 +41,12 @@ export type WorkshopRecord = {
   logo_url: string | null;
   gallery_image_urls: string[] | null;
   preferred_currency: "USD" | "VES" | "USD_VES";
+  tax_id: string | null;
+  document_terms: string | null;
+  warranty_terms: string | null;
+  default_quote_validity_days: number | null;
+  default_tax_label: string | null;
+  default_tax_rate: number | null;
   public_description: string | null;
   public_address: string | null;
   public_contact_phone: string | null;
@@ -779,6 +785,12 @@ export async function upsertCurrentWorkshop(input: WorkshopProfileInput) {
     logo_url: input.logoUrl ?? null,
     gallery_image_urls: input.galleryImageUrls,
     preferred_currency: input.currencyDisplay,
+    tax_id: input.taxId || null,
+    document_terms: input.documentTerms || null,
+    warranty_terms: input.warrantyTerms || null,
+    default_quote_validity_days: input.quoteValidityDays ? Number(input.quoteValidityDays) : null,
+    default_tax_label: input.taxLabel || null,
+    default_tax_rate: input.taxRate ? Number(input.taxRate) : null,
     public_description: input.publicDescription || null,
     public_address: input.publicAddress || null,
     public_contact_phone: input.publicContactPhone || null,

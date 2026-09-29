@@ -40,7 +40,7 @@ type PurchaseOrderFormProps = {
       id: string;
       name: string;
       label: string;
-      cost: number;
+      cost: number | null;
     }>;
   };
 };
@@ -225,7 +225,7 @@ export function PurchaseOrderForm({
                                 if (!currentCost) {
                                   setValue(
                                     `items.${index}.unitCost`,
-                                    String(selectedItem.cost || ""),
+                                    selectedItem.cost == null ? "" : String(selectedItem.cost),
                                     { shouldDirty: true },
                                   );
                                 }

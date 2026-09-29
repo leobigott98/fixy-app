@@ -27,7 +27,7 @@ import {
   getWorkOrderStatusLabel,
 } from "@/lib/data/work-orders";
 import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
-import { canViewWorkOrderPrices } from "@/lib/permissions";
+import { canManageWorkOrders, canViewMechanicDocument, canViewWorkOrderPrices } from "@/lib/permissions";
 import { formatCurrencyDisplay } from "@/lib/utils";
 import {
   buildPaymentReminderMessage,
@@ -47,7 +47,8 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
   const workshop = await requireCurrentWorkshop();
   const access = await getCurrentWorkshopAccess();
   const showPrices = access ? canViewWorkOrderPrices(access.role) : false;
-  const canManageOrders = access?.role !== "mechanic";
+  const canManageOrders = access ? canManageWorkOrders(access.role) : false;
+  const canViewMechanicPdf = access ? canViewMechanicDocument(access.role) : false;
   const { id } = await params;
   const detail = await getWorkOrderDetail(id);
   const { workOrder, client, vehicle, quote, services, parts, statusHistory, paymentSummary } =
@@ -111,12 +112,12 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-3 md:flex-row">
-          <Button asChild variant="outline">
-          <Link href={`/app/work-orders/${workOrder.id}/document` as Route}>
+          {canViewMechanicPdf ? <Button asChild variant="outline">
+          <Link href={`/app/work-orders/${workOrder.id}/document?print=1` as Route}>
             <FileText className="size-4" />
-            PDF / Imprimir
+            PDF mecánico
           </Link>
-        </Button>
+        </Button> : null}
         <WhatsAppLinkButton href={statusUpdateHref} label="Enviar actualizacion" variant="outline" />
         {showPrices ? <WhatsAppLinkButton href={readyForPickupHref} label="Listo para entregar" variant="outline" /> : null}
         {client ? (
@@ -247,7 +248,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
             <Badge variant="dark">Resumen operativo</Badge>
             <CardTitle className="text-white">Costo y lectura rapida</CardTitle>
             <CardDescription className="text-white/74">
-              Totales visibles para recepcion, jefe de taller y entrega.
+              Totales visibles para los roles operativos y de finanzas autorizados.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -373,7 +374,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
           </CardContent>
         </Card> : null}
 
-        <Card className="bg-white/86">
+        {showPrices ? <Card className="bg-white/86">
           <CardHeader>
             <CardTitle>Resumen de cobro</CardTitle>
             <CardDescription>
@@ -405,7 +406,7 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
             </div>
             <WhatsAppLinkButton href={paymentReminderHref} label="Enviar recordatorio de pago" variant="primary" />
           </CardContent>
-        </Card>
+        </Card> : null}
       </div>
     </div>
   );

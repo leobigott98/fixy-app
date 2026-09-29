@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { buildQuoteFormDefaults, getQuoteFormOptions } from "@/lib/data/quotes";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
+import { canViewInternalDocument } from "@/lib/permissions";
 
 type NewQuotePageProps = {
   searchParams: Promise<{
@@ -22,7 +23,7 @@ function getQueryValue(value?: string | string[]) {
 }
 
 export default async function NewQuotePage({ searchParams }: NewQuotePageProps) {
-  const workshop = await requireCurrentWorkshop();
+  const [workshop, access] = await Promise.all([requireCurrentWorkshop(), getCurrentWorkshopAccess()]);
   const params = await searchParams;
   const options = await getQuoteFormOptions();
 
@@ -70,6 +71,11 @@ export default async function NewQuotePage({ searchParams }: NewQuotePageProps) 
     selectedClientId: getQueryValue(params.clientId),
     selectedVehicleId: getQueryValue(params.vehicleId),
   });
+  if (workshop.default_tax_rate != null) {
+    initialValues.taxStatus = "applied";
+    initialValues.taxLabel = workshop.default_tax_label ?? "Impuesto";
+    initialValues.taxRate = String(workshop.default_tax_rate);
+  }
 
   return (
     <div className="space-y-6">
@@ -79,6 +85,7 @@ export default async function NewQuotePage({ searchParams }: NewQuotePageProps) 
         status="Presupuestos"
       />
       <QuoteForm
+        canManageCosts={Boolean(access && canViewInternalDocument(access.role))}
         initialValues={initialValues}
         mode="create"
         options={options}

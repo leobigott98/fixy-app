@@ -203,6 +203,15 @@ export function WorkshopProfileForm({ mode, initialValues }: WorkshopProfileForm
                     </Select>
                   }
                 />
+                <Field label="RIF / identificación fiscal" error={errors.taxId?.message} input={<Input placeholder="Opcional" {...register("taxId")} />} />
+                <Field label="Vigencia predeterminada (días)" error={errors.quoteValidityDays?.message} input={<Input inputMode="numeric" placeholder="Ej. 7" {...register("quoteValidityDays")} />} />
+                <Field label="Nombre del impuesto" error={errors.taxLabel?.message} input={<Input placeholder="Ej. IVA (opcional)" {...register("taxLabel")} />} />
+                <Field label="Tasa predeterminada (%)" error={errors.taxRate?.message} input={<Input inputMode="decimal" placeholder="Sin configurar" {...register("taxRate")} />} />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Garantía para documentos" error={errors.warrantyTerms?.message} input={<Textarea placeholder="Déjalo vacío si no ofreces una garantía configurada." {...register("warrantyTerms")} />} />
+                <Field label="Condiciones para documentos" error={errors.documentTerms?.message} input={<Textarea placeholder="Condiciones opcionales del taller." {...register("documentTerms")} />} />
               </div>
 
               <div className="grid gap-4 rounded-[28px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 sm:grid-cols-3">

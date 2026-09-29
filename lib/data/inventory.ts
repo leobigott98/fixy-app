@@ -15,7 +15,7 @@ export type InventoryItemRecord = {
   description: string | null;
   stock_quantity: number;
   low_stock_threshold: number;
-  cost: number;
+  cost: number | null;
   reference_sale_price: number;
   sku: string | null;
   notes: string | null;
@@ -70,7 +70,7 @@ export type InventoryPartOption = {
   label: string;
   sku: string | null;
   stockQuantity: number;
-  cost: number;
+  cost: number | null;
   referenceSalePrice: number;
 };
 
@@ -84,7 +84,7 @@ function normalizeInventoryItemRecord(record: Omit<InventoryItemRecord, "stock_q
     ...record,
     stock_quantity: Number(record.stock_quantity ?? 0),
     low_stock_threshold: Number(record.low_stock_threshold ?? 0),
-    cost: Number(record.cost ?? 0),
+    cost: record.cost == null ? null : Number(record.cost),
     reference_sale_price: Number(record.reference_sale_price ?? 0),
   };
 }
@@ -207,7 +207,7 @@ export async function getInventoryPartOptions(): Promise<InventoryPartOption[]> 
     const normalized = {
       ...item,
       stock_quantity: Number(item.stock_quantity ?? 0),
-      cost: Number(item.cost ?? 0),
+      cost: item.cost == null ? null : Number(item.cost),
       reference_sale_price: Number(item.reference_sale_price ?? 0),
     };
 

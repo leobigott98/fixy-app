@@ -122,7 +122,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
                           <Badge variant={item.lowStock ? "default" : "success"}>{item.stock_quantity}</Badge>
                         </td>
                         <td className="px-5 py-4">{item.low_stock_threshold}</td>
-                        <td className="px-5 py-4">{formatCurrencyDisplay(item.cost, "USD")}</td>
+                        <td className="px-5 py-4">{item.cost == null ? "Costo pendiente" : formatCurrencyDisplay(item.cost, "USD")}</td>
                         <td className="px-5 py-4">{formatCurrencyDisplay(item.reference_sale_price, "USD")}</td>
                         <td className="px-5 py-4">
                           {item.quoteUsageCount} cot. · {item.workOrderUsageCount} ord.
@@ -184,7 +184,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
 
                   <div className="flex items-center justify-between rounded-2xl border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 text-sm">
                     <span className="text-[var(--muted)]">Costo</span>
-                    <span className="font-medium">{formatCurrencyDisplay(item.cost, "USD")}</span>
+                    <span className="font-medium">{item.cost == null ? "Costo pendiente" : formatCurrencyDisplay(item.cost, "USD")}</span>
                   </div>
                 </CardContent>
               </Card>

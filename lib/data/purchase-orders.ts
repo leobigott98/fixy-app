@@ -70,7 +70,7 @@ export type PurchaseOrderFormOptions = {
     id: string;
     label: string;
     name: string;
-    cost: number;
+    cost: number | null;
   }>;
 };
 

@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   assertWorkshopOperationAllowed,
+  canManageWorkOrders,
   canViewWorkOrderPrices,
   hasModuleAccess,
   WorkshopOperationDeniedError,
@@ -72,6 +73,11 @@ test("finanzas puede registrar pagos y gastos", () => {
   doesNotThrow(() =>
     assertWorkshopOperationAllowed(financeMember, "expenses.record"),
   );
+  doesNotThrow(() =>
+    assertWorkshopOperationAllowed(financeMember, "work_orders.view"),
+  );
+  equal(canManageWorkOrders("finanzas"), false);
+  equal(canViewWorkOrderPrices("finanzas"), true);
 });
 
 test("el mecanico solo consulta una orden asignada", () => {
@@ -117,6 +123,28 @@ test("las vistas autenticadas no muestran precios al mecanico", () => {
   equal(canViewWorkOrderPrices("owner"), true);
   equal(canViewWorkOrderPrices("admin"), true);
   equal(canViewWorkOrderPrices("finanzas"), true);
+});
+
+test("documentos internos quedan fuera de recepción y mecánico", () => {
+  for (const role of ["recepcion", "mechanic"] as const) {
+    throws(
+      () => assertWorkshopOperationAllowed({ role, isActive: true, mechanicId: role === "mechanic" ? "mechanic-1" : null }, "documents.internal"),
+      (error) => error instanceof WorkshopOperationDeniedError && error.reason === "role_not_allowed",
+    );
+  }
+
+  for (const role of ["owner", "admin", "finanzas"] as const) {
+    doesNotThrow(() => assertWorkshopOperationAllowed({ role, isActive: true, mechanicId: null }, "documents.internal"));
+  }
+});
+
+test("el documento mecánico exige asignación cuando el rol es mecánico", () => {
+  const mechanic: WorkshopOperationSubject = { role: "mechanic", isActive: true, mechanicId: "mechanic-1" };
+  doesNotThrow(() => assertWorkshopOperationAllowed(mechanic, "documents.mechanic", { assignedMechanicId: "mechanic-1" }));
+  throws(
+    () => assertWorkshopOperationAllowed(mechanic, "documents.mechanic", { assignedMechanicId: "mechanic-2" }),
+    (error) => error instanceof WorkshopOperationDeniedError && error.reason === "work_order_not_assigned",
+  );
 });
 
 test("el shell del mecanico carga sus modulos sin consultar notificaciones", () => {

@@ -30,7 +30,7 @@ export function AppSidebar({
   const navigation = getPrimaryNavigation(role);
   const isCarOwner = role === "car_owner";
   return (
-    <aside className="fixy-shell hidden w-[292px] shrink-0 border-r border-white/10 px-5 py-6 lg:flex lg:flex-col">
+    <aside className="protected-app-sidebar fixy-shell hidden w-[292px] shrink-0 border-r border-white/10 px-5 py-6 lg:flex lg:flex-col">
       <FixyLogo className="text-white [&_.fixy-logo-subtitle]:text-white/62" />
 
       <div className="mt-8 grid grid-cols-2 gap-1 rounded-[14px] border border-white/18 bg-white/5 p-1">

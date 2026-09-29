@@ -5,12 +5,17 @@ const decimalString = z
   .trim()
   .refine((value) => /^\d+(\.\d{1,2})?$/.test(value), "Ingresa un numero valido.");
 
+const optionalDecimalString = z
+  .string()
+  .trim()
+  .refine((value) => value === "" || /^\d+(\.\d{1,2})?$/.test(value), "Ingresa un numero valido.");
+
 export const inventoryItemSchema = z.object({
   name: z.string().trim().min(2, "Ingresa el nombre del repuesto."),
   description: z.string().trim(),
   stockQuantity: decimalString,
   lowStockThreshold: decimalString,
-  cost: decimalString,
+  cost: optionalDecimalString,
   referenceSalePrice: decimalString,
   sku: z.string().trim(),
   notes: z.string().trim(),
@@ -23,7 +28,7 @@ export type InventoryItemInput = {
   description: string;
   stockQuantity: number;
   lowStockThreshold: number;
-  cost: number;
+  cost: number | null;
   referenceSalePrice: number;
   sku: string;
   notes: string;
@@ -35,7 +40,7 @@ export function normalizeInventoryItemInput(values: InventoryItemFormValues): In
     description: values.description,
     stockQuantity: Number(values.stockQuantity),
     lowStockThreshold: Number(values.lowStockThreshold),
-    cost: Number(values.cost),
+    cost: values.cost === "" ? null : Number(values.cost),
     referenceSalePrice: Number(values.referenceSalePrice),
     sku: values.sku,
     notes: values.notes,
@@ -59,7 +64,7 @@ export function buildInventoryItemFormDefaults(
     description: source?.description ?? "",
     stockQuantity: String(source?.stockQuantity ?? 0),
     lowStockThreshold: String(source?.lowStockThreshold ?? 0),
-    cost: String(source?.cost ?? 0),
+    cost: source?.cost == null ? "" : String(source.cost),
     referenceSalePrice: String(source?.referenceSalePrice ?? 0),
     sku: source?.sku ?? "",
     notes: source?.notes ?? "",

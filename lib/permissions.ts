@@ -69,8 +69,11 @@ export const workshopOperationMatrix = {
   "marketplace.manage": ["owner", "admin", "recepcion"],
   "quotes.view": ["owner", "admin", "recepcion", "finanzas"],
   "quotes.manage": ["owner", "admin", "recepcion", "finanzas"],
+  "documents.client": ["owner", "admin", "recepcion", "finanzas"],
+  "documents.internal": ["owner", "admin", "finanzas"],
+  "documents.mechanic": ["owner", "admin", "jefe_taller", "recepcion", "mechanic"],
   "work_orders.manage": ["owner", "admin", "jefe_taller", "recepcion"],
-  "work_orders.view": ["owner", "admin", "jefe_taller", "recepcion", "mechanic"],
+  "work_orders.view": ["owner", "admin", "jefe_taller", "recepcion", "finanzas", "mechanic"],
   "work_orders.report": ["owner", "admin", "jefe_taller", "recepcion", "mechanic"],
   "mechanics.view": ["owner", "admin", "jefe_taller", "recepcion"],
   "mechanics.manage": ["owner", "admin", "jefe_taller"],
@@ -114,6 +117,7 @@ export type WorkshopOperationDecision =
 const mechanicScopedOperations = new Set<WorkshopOperation>([
   "work_orders.view",
   "work_orders.report",
+  "documents.mechanic",
 ]);
 
 export class WorkshopOperationDeniedError extends Error {
@@ -244,6 +248,22 @@ export function getRolePermissions(role: WorkshopRole) {
 
 export function canViewWorkOrderPrices(role: WorkshopRole) {
   return role !== "mechanic";
+}
+
+export function canManageWorkOrders(role: WorkshopRole) {
+  return (workshopOperationMatrix["work_orders.manage"] as readonly WorkshopRole[]).includes(role);
+}
+
+export function canViewClientDocument(role: WorkshopRole) {
+  return (workshopOperationMatrix["documents.client"] as readonly WorkshopRole[]).includes(role);
+}
+
+export function canViewInternalDocument(role: WorkshopRole) {
+  return (workshopOperationMatrix["documents.internal"] as readonly WorkshopRole[]).includes(role);
+}
+
+export function canViewMechanicDocument(role: WorkshopRole) {
+  return (workshopOperationMatrix["documents.mechanic"] as readonly WorkshopRole[]).includes(role);
 }
 
 export function getRoleHomePath(role: AppRole) {

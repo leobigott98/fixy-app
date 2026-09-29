@@ -20,6 +20,7 @@ import { calculateQuoteTotals, quoteFormSchema, type QuoteFormValues, type Quote
 import { formatCurrencyDisplay } from "@/lib/utils";
 
 type QuoteFormProps = {
+  canManageCosts: boolean;
   mode: "create" | "edit";
   initialValues: QuoteFormValues;
   options: {
@@ -39,6 +40,7 @@ type QuoteFormProps = {
       name: string;
       stockQuantity: number;
       referenceSalePrice: number;
+      cost: number | null;
     }>;
   };
   preferredCurrency: "USD" | "VES" | "USD_VES";
@@ -51,6 +53,10 @@ function createEmptyItem(itemType: "labor" | "part"): QuoteItemFormValues {
     inventoryItemId: "",
     itemType,
     description: "",
+    workGroup: "Trabajo general",
+    unit: itemType === "labor" ? "servicio" : "unidad",
+    unitCost: "",
+    costSource: "manual",
     quantity: "1",
     unitPrice: "",
   };
@@ -65,7 +71,7 @@ function toNumber(value?: string) {
   return Number.isNaN(number) ? 0 : number;
 }
 
-export function QuoteForm({ mode, initialValues, options, preferredCurrency, quoteId }: QuoteFormProps) {
+export function QuoteForm({ canManageCosts, mode, initialValues, options, preferredCurrency, quoteId }: QuoteFormProps) {
   const router = useRouter();
   const [formMessage, setFormMessage] = useState<string | null>(null);
 
@@ -95,6 +101,9 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
   const vehicleId = useWatch({ control, name: "vehicleId" });
   const laborItems = useWatch({ control, name: "laborItems" }) ?? [];
   const partItems = useWatch({ control, name: "partItems" }) ?? [];
+  const discountAmount = useWatch({ control, name: "discountAmount" }) ?? "0";
+  const taxStatus = useWatch({ control, name: "taxStatus" }) ?? "pending";
+  const taxRate = useWatch({ control, name: "taxRate" }) ?? "";
   const selectedClient = options.clients.find((client) => client.id === clientId);
 
   const vehicleOptions = useMemo(
@@ -122,6 +131,10 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
     const labor = laborItems.map((item, index) => ({
       itemType: "labor" as const,
       description: item.description,
+      workGroup: item.workGroup || "Trabajo general",
+      unit: item.unit || "servicio",
+      unitCost: item.unitCost?.trim() ? Number(item.unitCost) : null,
+      costSource: item.costSource || null,
       quantity: toNumber(item.quantity),
       unitPrice: toNumber(item.unitPrice),
       lineTotal: Number((toNumber(item.quantity) * toNumber(item.unitPrice)).toFixed(2)),
@@ -131,14 +144,22 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
     const parts = partItems.map((item, index) => ({
       itemType: "part" as const,
       description: item.description,
+      workGroup: item.workGroup || "Trabajo general",
+      unit: item.unit || "unidad",
+      unitCost: item.unitCost?.trim() ? Number(item.unitCost) : null,
+      costSource: item.costSource || null,
       quantity: toNumber(item.quantity),
       unitPrice: toNumber(item.unitPrice),
       lineTotal: Number((toNumber(item.quantity) * toNumber(item.unitPrice)).toFixed(2)),
       sortOrder: index,
     }));
 
-    return calculateQuoteTotals(labor, parts);
-  }, [laborItems, partItems]);
+    return calculateQuoteTotals(labor, parts, {
+      discountAmount: toNumber(discountAmount),
+      taxStatus,
+      taxRate: taxRate.trim() ? toNumber(taxRate) : null,
+    });
+  }, [discountAmount, laborItems, partItems, taxRate, taxStatus]);
 
   const onSubmit = handleSubmit(async (values) => {
     const result = await saveQuoteAction(values, quoteId);
@@ -230,6 +251,7 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
             </div>
 
             <ItemsSection
+              canManageCosts={canManageCosts}
               description="Servicios, diagnostico, mano de obra o tareas del taller."
               errors={errors.laborItems}
               fields={laborItemsArray.fields}
@@ -242,6 +264,7 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
             />
 
             <ItemsSection
+              canManageCosts={canManageCosts}
               description="Repuestos, insumos o piezas necesarias para el trabajo."
               errors={errors.partItems}
               fields={partItemsArray.fields}
@@ -254,6 +277,18 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
               sectionName="partItems"
               inventoryItems={options.inventoryItems}
             />
+
+            <div className="grid gap-4 rounded-[28px] border border-[var(--line)] bg-[rgba(21,28,35,0.02)] p-4 sm:grid-cols-2">
+              <Field label="Vigencia hasta" error={errors.validUntil?.message} input={<Input type="date" {...register("validUntil")} />} />
+              <Field label="Descuento" error={errors.discountAmount?.message} input={<Input inputMode="decimal" placeholder="0.00" {...register("discountAmount")} />} />
+              <Field
+                label="Tratamiento de impuestos"
+                error={errors.taxStatus?.message}
+                input={<Select {...register("taxStatus")}><option value="pending">Pendiente de configurar</option><option value="applied">Aplicar impuesto</option><option value="not_applicable">No aplica según configuración</option></Select>}
+              />
+              {taxStatus === "applied" ? <Field label="Nombre del impuesto" error={errors.taxLabel?.message} input={<Input placeholder="Ej. IVA" {...register("taxLabel")} />} /> : null}
+              {taxStatus === "applied" ? <Field label="Tasa (%)" error={errors.taxRate?.message} input={<Input inputMode="decimal" placeholder="Ej. 16" {...register("taxRate")} />} /> : null}
+            </div>
 
             <Field
               label="Notas"
@@ -306,6 +341,8 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
               label="Subtotal"
               value={formatCurrencyDisplay(totals.subtotal, preferredCurrency)}
             />
+            {totals.discountAmount > 0 ? <SummaryRow label="Descuento" value={`- ${formatCurrencyDisplay(totals.discountAmount, preferredCurrency)}`} /> : null}
+            {totals.taxAmount != null ? <SummaryRow label="Impuesto" value={formatCurrencyDisplay(totals.taxAmount, preferredCurrency)} /> : null}
             <div className="rounded-2xl bg-white/10 p-4">
               <div className="text-sm text-white/64">Total</div>
               <div className="mt-2 font-[family-name:var(--font-heading)] text-4xl font-bold tracking-tight">
@@ -336,6 +373,7 @@ export function QuoteForm({ mode, initialValues, options, preferredCurrency, quo
 }
 
 function ItemsSection({
+  canManageCosts,
   label,
   description,
   fields,
@@ -348,6 +386,7 @@ function ItemsSection({
   sectionName = "laborItems",
   inventoryItems,
 }: {
+  canManageCosts: boolean;
   label: string;
   description: string;
   fields: Array<{ id: string }>;
@@ -364,6 +403,7 @@ function ItemsSection({
     name: string;
     stockQuantity: number;
     referenceSalePrice: number;
+    cost: number | null;
   }>;
 }) {
   return (
@@ -388,8 +428,8 @@ function ItemsSection({
             <div
               className={
                 sectionName === "partItems"
-                  ? "grid gap-3 sm:grid-cols-[0.9fr_1.15fr_0.45fr_0.55fr_auto]"
-                  : "grid gap-3 sm:grid-cols-[1.2fr_0.45fr_0.55fr_auto]"
+                  ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-[0.8fr_0.8fr_1fr_0.38fr_0.38fr_0.55fr_0.55fr_auto]"
+                  : "grid gap-3 sm:grid-cols-2 xl:grid-cols-[0.8fr_1fr_0.38fr_0.38fr_0.55fr_0.55fr_auto]"
               }
             >
               {sectionName === "partItems" ? (
@@ -418,6 +458,8 @@ function ItemsSection({
                             String(selectedItem.referenceSalePrice || ""),
                             { shouldDirty: true },
                           );
+                          setValue(`${sectionName}.${index}.unitCost`, selectedItem.cost == null ? "" : String(selectedItem.cost), { shouldDirty: true });
+                          setValue(`${sectionName}.${index}.costSource`, selectedItem.cost == null ? "manual" : "inventario", { shouldDirty: true });
                         }}
                       >
                         <option value="">Repuesto libre</option>
@@ -431,6 +473,7 @@ function ItemsSection({
                   })()}
                 />
               ) : null}
+              <Field label="Trabajo" error={errors?.[index]?.workGroup?.message} input={<Input placeholder="Ej. Frenos delanteros" {...register(`${sectionName}.${index}.workGroup`)} />} />
               <Field
                 label="Descripcion"
                 error={errors?.[index]?.description?.message}
@@ -446,11 +489,13 @@ function ItemsSection({
                 error={errors?.[index]?.quantity?.message}
                 input={<Input placeholder="1" {...register(`${sectionName}.${index}.quantity`)} />}
               />
+              <Field label="Unidad" error={errors?.[index]?.unit?.message} input={<Input placeholder={sectionName === "laborItems" ? "servicio" : "unidad"} {...register(`${sectionName}.${index}.unit`)} />} />
               <Field
-                label="Precio unitario"
+                label="Venta unitaria"
                 error={errors?.[index]?.unitPrice?.message}
                 input={<Input placeholder="0" {...register(`${sectionName}.${index}.unitPrice`)} />}
               />
+              {canManageCosts ? <Field label={sectionName === "laborItems" ? "Costo/pago mecánico" : "Costo unitario"} error={errors?.[index]?.unitCost?.message} input={<Input inputMode="decimal" placeholder="Costo pendiente" {...register(`${sectionName}.${index}.unitCost`)} />} /> : <input type="hidden" {...register(`${sectionName}.${index}.unitCost`)} />}
               <div className="flex items-end">
                 <Button
                   disabled={fields.length === 1 && sectionName === "laborItems"}
@@ -465,6 +510,7 @@ function ItemsSection({
             </div>
             <input type="hidden" {...register(`${sectionName}.${index}.rowId`)} />
             <input type="hidden" {...register(`${sectionName}.${index}.itemType`)} />
+            <input type="hidden" {...register(`${sectionName}.${index}.costSource`)} />
             {sectionName === "laborItems" ? (
               <input type="hidden" {...register(`${sectionName}.${index}.inventoryItemId`)} />
             ) : null}

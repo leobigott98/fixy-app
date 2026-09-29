@@ -5,6 +5,9 @@ import { workOrderItemTypeOptions, workOrderStatusValues } from "@/lib/work-orde
 export const workOrderItemFormSchema = z.object({
   rowId: z.string(),
   inventoryItemId: z.string(),
+  workGroup: z.string().trim().min(2, "Indica el trabajo al que pertenece.").default("Trabajo general"),
+  unit: z.string().trim().min(1, "Indica la unidad.").default("unidad"),
+  unitCost: z.string().trim().refine((value) => value === "" || /^\d+(\.\d{1,2})?$/.test(value), "Ingresa un costo valido.").default(""),
   itemType: z.enum(
     workOrderItemTypeOptions.map((option) => option.value) as ["service", "part"],
     "Selecciona el tipo de item.",
@@ -34,13 +37,16 @@ export const workOrderFormSchema = z.object({
   partItems: z.array(workOrderItemFormSchema),
 });
 
-export type WorkOrderFormValues = z.infer<typeof workOrderFormSchema>;
-export type WorkOrderItemFormValues = z.infer<typeof workOrderItemFormSchema>;
+export type WorkOrderFormValues = z.input<typeof workOrderFormSchema>;
+export type WorkOrderItemFormValues = z.input<typeof workOrderItemFormSchema>;
 
 export type WorkOrderItemInput = {
   itemType: "service" | "part";
   inventoryItemId?: string;
   description: string;
+  workGroup?: string;
+  unit?: string;
+  unitCost?: number | null;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -80,6 +86,9 @@ export function mapWorkOrderItems(
       itemType,
       inventoryItemId: item.inventoryItemId || undefined,
       description: item.description,
+      workGroup: item.workGroup || "Trabajo general",
+      unit: item.unit || (itemType === "service" ? "servicio" : "unidad"),
+      unitCost: item.unitCost?.trim() ? Number(item.unitCost) : null,
       quantity,
       unitPrice,
       lineTotal: Number((quantity * unitPrice).toFixed(2)),

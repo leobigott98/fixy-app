@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Route } from "next";
 import Link from "next/link";
-import { CalendarDays, ClipboardList, FileText, MessageCircleMore, Send, SquarePen, Wrench } from "lucide-react";
+import { CalendarDays, ClipboardList, Eye, FileText, Hammer, MessageCircleMore, Send, ShieldCheck, SquarePen, Wrench } from "lucide-react";
 
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge";
 import { ClientShareTools } from "@/components/shared/client-share-tools";
@@ -13,6 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getQuoteDetail, getQuoteDocumentHref, getQuoteEditHref, getQuoteStatusLabel } from "@/lib/data/quotes";
 import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess } from "@/lib/data/workshops";
+import { getLinkedWorkOrderDocumentLink } from "@/lib/data/repair-documents";
+import { canViewInternalDocument, canViewMechanicDocument } from "@/lib/permissions";
 import { formatCurrencyDisplay } from "@/lib/utils";
 import { buildQuoteWhatsAppMessage, buildVehicleSummary, buildWhatsAppHref } from "@/lib/whatsapp";
 
@@ -23,9 +26,9 @@ type QuoteDetailPageProps = {
 };
 
 export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) {
-  const workshop = await requireCurrentWorkshop();
+  const [workshop, access] = await Promise.all([requireCurrentWorkshop(), getCurrentWorkshopAccess()]);
   const { id } = await params;
-  const detail = await getQuoteDetail(id);
+  const [detail, linkedWorkOrder] = await Promise.all([getQuoteDetail(id), getLinkedWorkOrderDocumentLink(id)]);
   const { quote, client, vehicle, laborItems, partItems } = detail;
   const sendQuoteHref =
     client?.whatsapp_phone
@@ -51,13 +54,35 @@ export default async function QuoteDetailPage({ params }: QuoteDetailPageProps) 
         action={{ label: "Editar presupuesto", icon: <SquarePen className="size-4" />, href: getQuoteEditHref(quote.id) }}
       />
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <Button asChild variant="outline">
           <Link href={getQuoteDocumentHref(quote.id)}>
-            <FileText className="size-4" />
-            PDF / Imprimir
+            <Eye className="size-4" />
+            Vista previa cliente
           </Link>
         </Button>
+        <Button asChild variant="outline">
+          <Link href={`${getQuoteDocumentHref(quote.id)}?print=1` as Route}>
+            <FileText className="size-4" />
+            PDF cliente
+          </Link>
+        </Button>
+        {access && canViewInternalDocument(access.role) ? (
+          <Button asChild variant="outline">
+            <Link href={`/app/quotes/${quote.id}/internal-document?print=1` as Route}>
+              <ShieldCheck className="size-4" />
+              PDF interno
+            </Link>
+          </Button>
+        ) : null}
+        {access && linkedWorkOrder && canViewMechanicDocument(access.role) ? (
+          <Button asChild variant="outline">
+            <Link href={`/app/work-orders/${linkedWorkOrder.id}/document?print=1` as Route}>
+              <Hammer className="size-4" />
+              PDF mecánico
+            </Link>
+          </Button>
+        ) : null}
         <WhatsAppLinkButton href={sendQuoteHref} label="Enviar por WhatsApp" variant="primary" />
         {client ? (
           <Button asChild variant="outline">

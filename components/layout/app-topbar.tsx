@@ -26,7 +26,7 @@ export function AppTopbar({
   const isCarOwner = role === "car_owner";
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="protected-app-topbar flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2 text-sm font-semibold text-[var(--foreground)]">
         <Link className="text-[var(--foreground)] hover:text-[var(--primary-strong)]" href="/">
           Fixy

@@ -31,6 +31,12 @@ export const workshopProfileSchema = z.object({
     )
     .max(8, "Sube hasta 8 fotos del taller."),
   currencyDisplay: z.enum(currencyDisplayValues, "Selecciona una moneda."),
+  taxId: z.string().trim().max(40, "Usa una identificación fiscal más corta."),
+  documentTerms: z.string().trim().max(800, "Usa condiciones más breves."),
+  warrantyTerms: z.string().trim().max(800, "Usa una garantía más breve."),
+  quoteValidityDays: z.string().trim().refine((value) => value === "" || /^\d+$/.test(value), "Ingresa días válidos."),
+  taxLabel: z.string().trim().max(40, "Usa un nombre de impuesto más corto."),
+  taxRate: z.string().trim().refine((value) => value === "" || /^\d+(\.\d{1,4})?$/.test(value), "Ingresa una tasa válida."),
   publicDescription: z
     .string()
     .trim()

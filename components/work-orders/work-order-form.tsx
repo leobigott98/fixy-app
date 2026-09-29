@@ -46,6 +46,9 @@ function createEmptyItem(itemType: "service" | "part"): WorkOrderItemFormValues 
     inventoryItemId: "",
     itemType,
     description: "",
+    workGroup: "Trabajo general",
+    unit: itemType === "service" ? "servicio" : "unidad",
+    unitCost: "",
     quantity: "1",
     unitPrice: "",
   };
@@ -148,6 +151,9 @@ export function WorkOrderForm({
     const services = serviceItems.map((item, index) => ({
       itemType: "service" as const,
       description: item.description,
+      workGroup: item.workGroup || "Trabajo general",
+      unit: item.unit || "servicio",
+      unitCost: item.unitCost?.trim() ? Number(item.unitCost) : null,
       quantity: toNumber(item.quantity),
       unitPrice: toNumber(item.unitPrice),
       lineTotal: Number((toNumber(item.quantity) * toNumber(item.unitPrice)).toFixed(2)),
@@ -156,6 +162,9 @@ export function WorkOrderForm({
     const parts = partItems.map((item, index) => ({
       itemType: "part" as const,
       description: item.description,
+      workGroup: item.workGroup || "Trabajo general",
+      unit: item.unit || "unidad",
+      unitCost: item.unitCost?.trim() ? Number(item.unitCost) : null,
       quantity: toNumber(item.quantity),
       unitPrice: toNumber(item.unitPrice),
       lineTotal: Number((toNumber(item.quantity) * toNumber(item.unitPrice)).toFixed(2)),
@@ -536,6 +545,9 @@ function ItemsSection({
             </div>
             <input type="hidden" {...register(`${sectionName}.${index}.rowId`)} />
             <input type="hidden" {...register(`${sectionName}.${index}.itemType`)} />
+            <input type="hidden" {...register(`${sectionName}.${index}.workGroup`)} />
+            <input type="hidden" {...register(`${sectionName}.${index}.unit`)} />
+            <input type="hidden" {...register(`${sectionName}.${index}.unitCost`)} />
             {sectionName === "serviceItems" ? (
               <input type="hidden" {...register(`${sectionName}.${index}.inventoryItemId`)} />
             ) : null}

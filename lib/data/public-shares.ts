@@ -7,6 +7,7 @@ import type {
   WorkOrderStatusHistoryRecord,
 } from "@/lib/data/work-orders";
 import { isCollectedPaymentStatus } from "@/lib/finances/constants";
+import { buildClientQuoteProjection, type ClientQuoteProjection } from "@/lib/documents/repair-documents";
 
 type PublicWorkshop = {
   id: string;
@@ -17,6 +18,12 @@ type PublicWorkshop = {
   opening_hours_label: string | null;
   logo_url: string | null;
   preferred_currency: "USD" | "VES" | "USD_VES";
+  public_address: string | null;
+  public_contact_phone: string | null;
+  public_contact_email: string | null;
+  tax_id: string | null;
+  document_terms: string | null;
+  warranty_terms: string | null;
 };
 
 type PublicClient = {
@@ -49,7 +56,7 @@ async function getWorkshopById(workshopId: string) {
   const supabase = requireAdminClient();
   const { data, error } = await supabase
     .from("workshops")
-    .select("id,workshop_name,owner_name,whatsapp_phone,city,opening_hours_label,logo_url,preferred_currency")
+    .select("id,workshop_name,owner_name,whatsapp_phone,city,opening_hours_label,logo_url,preferred_currency,public_address,public_contact_phone,public_contact_email,tax_id,document_terms,warranty_terms")
     .eq("id", workshopId)
     .maybeSingle();
 
@@ -103,18 +110,21 @@ export type PublicQuoteDetail = {
   client: PublicClient | null;
   vehicle: PublicVehicle | null;
   quote: QuoteRecord;
-  laborItems: QuoteItemRecord[];
-  partItems: QuoteItemRecord[];
+  laborItems: PublicQuoteItem[];
+  partItems: PublicQuoteItem[];
   canApprove: boolean;
 };
+
+type PublicQuoteItem = Omit<QuoteItemRecord, "unit_cost" | "cost_source" | "cost_captured_at">;
 
 export async function getPublicQuoteDetailByToken(token: string): Promise<PublicQuoteDetail | null> {
   const supabase = requireAdminClient();
   const { data: quoteData, error: quoteError } = await supabase
     .from("quotes")
-    .select("*")
+    .select("id,workshop_id,client_id,vehicle_id,title,status,subtotal,total_amount,notes,sent_at,approved_at,document_number,version,issued_at,valid_until,discount_amount,tax_status,tax_label,tax_rate,tax_amount,public_share_token,public_share_enabled,public_shared_at,archived_at,deleted_at,created_at,updated_at")
     .eq("public_share_token", token)
     .eq("public_share_enabled", true)
+    .in("status", ["sent", "approved", "rejected", "expired"])
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -131,7 +141,7 @@ export async function getPublicQuoteDetailByToken(token: string): Promise<Public
   const [{ data: itemsData, error: itemsError }, workshop, client, vehicle] = await Promise.all([
     supabase
       .from("quote_items")
-      .select("*")
+      .select("id,quote_id,workshop_id,inventory_item_id,item_type,description,work_group,quantity,unit_label,unit_price,line_total,sort_order,created_at")
       .eq("quote_id", quote.id)
       .eq("workshop_id", quote.workshop_id)
       .order("sort_order", { ascending: true }),
@@ -148,7 +158,7 @@ export async function getPublicQuoteDetailByToken(token: string): Promise<Public
     return null;
   }
 
-  const items = ((itemsData as QuoteItemRecord[] | null) ?? []).map((item) => ({
+  const items: PublicQuoteItem[] = ((itemsData as PublicQuoteItem[] | null) ?? []).map((item) => ({
     ...item,
     quantity: Number(item.quantity ?? 0),
     unit_price: Number(item.unit_price ?? 0),
@@ -166,8 +176,60 @@ export async function getPublicQuoteDetailByToken(token: string): Promise<Public
     },
     laborItems: items.filter((item) => item.item_type === "labor"),
     partItems: items.filter((item) => item.item_type === "part"),
-    canApprove: quote.status === "draft" || quote.status === "sent",
+    canApprove: quote.status === "sent",
   };
+}
+
+export async function getPublicClientQuoteDocumentByToken(token: string): Promise<ClientQuoteProjection | null> {
+  const detail = await getPublicQuoteDetailByToken(token);
+  if (!detail) return null;
+
+  return buildClientQuoteProjection({
+    workshop: {
+      name: detail.workshop.workshop_name,
+      address: detail.workshop.public_address,
+      city: detail.workshop.city,
+      phone: detail.workshop.public_contact_phone || detail.workshop.whatsapp_phone,
+      email: detail.workshop.public_contact_email,
+      taxId: detail.workshop.tax_id,
+      logoUrl: detail.workshop.logo_url,
+      warrantyTerms: detail.workshop.warranty_terms,
+      documentTerms: detail.workshop.document_terms,
+    },
+    quote: {
+      id: detail.quote.id,
+      number: detail.quote.document_number || `PRE-${detail.quote.id.slice(0, 8).toUpperCase()}`,
+      version: detail.quote.version ?? 1,
+      status: detail.quote.status,
+      createdAt: detail.quote.created_at,
+      issuedAt: detail.quote.issued_at,
+      approvedAt: detail.quote.approved_at,
+      validUntil: detail.quote.valid_until,
+      notes: detail.quote.notes,
+      currency: detail.workshop.preferred_currency,
+      discountAmount: Number(detail.quote.discount_amount ?? 0),
+      taxStatus: detail.quote.tax_status ?? "pending",
+      taxLabel: detail.quote.tax_label,
+      taxRate: detail.quote.tax_rate == null ? null : Number(detail.quote.tax_rate),
+    },
+    client: detail.client ? { name: detail.client.full_name } : null,
+    vehicle: detail.vehicle
+      ? {
+          label: detail.vehicle.vehicle_label || [detail.vehicle.make, detail.vehicle.model, detail.vehicle.vehicle_year].filter(Boolean).join(" "),
+          plate: detail.vehicle.plate,
+          mileage: detail.vehicle.mileage,
+        }
+      : null,
+    lines: [...detail.laborItems, ...detail.partItems].map((item) => ({
+      id: item.id,
+      itemType: item.item_type,
+      description: item.description,
+      workGroup: item.work_group,
+      quantity: item.quantity,
+      unit: item.unit_label,
+      unitSalePrice: item.unit_price,
+    })),
+  });
 }
 
 export async function approvePublicQuoteByToken(token: string) {
@@ -198,6 +260,12 @@ export async function approvePublicQuoteByToken(token: string) {
     throw error;
   }
 
+  await supabase
+    .from("quote_revisions")
+    .update({ accepted_at: now, status: "approved" })
+    .eq("quote_id", detail.quote.id)
+    .eq("version", detail.quote.version ?? 1);
+
   return data as QuoteRecord;
 }
 
@@ -222,7 +290,7 @@ export async function getPublicWorkOrderDetailByToken(
   const supabase = requireAdminClient();
   const { data: workOrderData, error: workOrderError } = await supabase
     .from("work_orders")
-    .select("*")
+    .select("id,workshop_id,client_id,vehicle_id,quote_id,code,title,vehicle_label,status,promised_date,completed_at,total_amount,bay_slot,assigned_mechanic_id,assigned_mechanic_name,public_share_token,public_share_enabled,public_shared_at,notes,created_at,updated_at")
     .eq("public_share_token", token)
     .eq("public_share_enabled", true)
     .maybeSingle();
@@ -248,13 +316,13 @@ export async function getPublicWorkOrderDetailByToken(
   ] = await Promise.all([
     supabase
       .from("work_order_services")
-      .select("*")
+      .select("id,work_order_id,workshop_id,description,quantity,unit_price,line_total,sort_order,created_at")
       .eq("work_order_id", workOrder.id)
       .eq("workshop_id", workOrder.workshop_id)
       .order("sort_order", { ascending: true }),
     supabase
       .from("work_order_parts")
-      .select("*")
+      .select("id,work_order_id,workshop_id,inventory_item_id,description,quantity,unit_price,line_total,sort_order,created_at")
       .eq("work_order_id", workOrder.id)
       .eq("workshop_id", workOrder.workshop_id)
       .order("sort_order", { ascending: true }),

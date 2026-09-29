@@ -409,13 +409,13 @@ export async function getVehicleDetail(vehicleId: string): Promise<VehicleDetail
 
     const [servicesResult, partsResult, paymentsResult] = await Promise.all([
       supabase
-        .from("work_order_services")
+        .from("operation_work_order_service_financials")
         .select("work_order_id,description,quantity,unit_price,line_total,sort_order")
         .eq("workshop_id", workshop.id)
         .in("work_order_id", workOrderIds)
         .order("sort_order"),
       supabase
-        .from("work_order_parts")
+        .from("operation_work_order_part_financials")
         .select("work_order_id,description,quantity,unit_price,line_total,sort_order")
         .eq("workshop_id", workshop.id)
         .in("work_order_id", workOrderIds)

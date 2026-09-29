@@ -34,6 +34,9 @@ export default async function PublicQuotePage({ params }: PublicQuotePageProps) 
     detail.workshop.whatsapp_phone,
     `Hola ${detail.workshop.workshop_name}, estoy revisando el presupuesto ${detail.quote.id.slice(0, 8).toUpperCase()} de ${buildVehicleSummary(detail.vehicle)}.`,
   );
+  const taxIsProvisional = detail.quote.tax_status === "pending"
+    || (detail.quote.tax_status === "applied" && detail.quote.tax_rate == null);
+  const taxableBase = Number((detail.quote.subtotal - detail.quote.discount_amount).toFixed(2));
 
   return (
     <PublicShell
@@ -41,7 +44,7 @@ export default async function PublicQuotePage({ params }: PublicQuotePageProps) 
         <>
           <WhatsAppLinkButton href={workshopContactHref} label="Hablar con el taller" variant="outline" />
           <Button asChild variant="outline">
-            <Link href={buildPublicQuoteDocumentPath(token) as Route}>
+            <Link href={`${buildPublicQuoteDocumentPath(token)}?print=1` as Route}>
               <FileText className="size-4" />
               Guardar PDF
             </Link>
@@ -60,9 +63,9 @@ export default async function PublicQuotePage({ params }: PublicQuotePageProps) 
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Estado" value={<QuoteStatusBadge status={detail.quote.status} />} />
-        <Metric label="Fecha" value={new Date(detail.quote.created_at).toLocaleDateString("es-VE")} />
+        <Metric label="Documento" value={`${detail.quote.document_number || detail.quote.id.slice(0, 8).toUpperCase()} · v${detail.quote.version}`} />
+        <Metric label="Fecha" value={new Date(detail.quote.issued_at || detail.quote.created_at).toLocaleDateString("es-VE")} />
         <Metric label="Vehículo" value={detail.vehicle?.vehicle_label || detail.vehicle?.plate || "Pendiente"} />
-        <Metric label="Total" value={formatCurrencyDisplay(detail.quote.total_amount, detail.workshop.preferred_currency)} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
@@ -138,12 +141,20 @@ export default async function PublicQuotePage({ params }: PublicQuotePageProps) 
                 label="Subtotal"
                 value={formatCurrencyDisplay(detail.quote.subtotal, detail.workshop.preferred_currency)}
               />
+              {detail.quote.discount_amount > 0 ? <TotalRow label="Descuento" value={`- ${formatCurrencyDisplay(detail.quote.discount_amount, detail.workshop.preferred_currency)}`} /> : null}
+              <TotalRow label="Base" value={formatCurrencyDisplay(taxableBase, detail.workshop.preferred_currency)} />
+              {detail.quote.tax_status === "applied" && detail.quote.tax_amount != null ? <TotalRow label={`${detail.quote.tax_label || "Impuesto"}${detail.quote.tax_rate != null ? ` (${detail.quote.tax_rate} %)` : ""}`} value={formatCurrencyDisplay(detail.quote.tax_amount, detail.workshop.preferred_currency)} /> : null}
+              {detail.quote.tax_status === "not_applicable" ? <TotalRow label="Impuestos" value="No aplican según configuración" /> : null}
+              {taxIsProvisional ? <div className="rounded-2xl bg-amber-400/15 p-4 text-sm text-amber-100">Impuestos pendientes de configuración. El total mostrado es provisional.</div> : null}
               <div className="rounded-2xl bg-white/10 p-4">
-                <div className="text-sm text-white/70">Total</div>
+                <div className="text-sm text-white/70">Total estimado</div>
                 <div className="mt-2 font-[family-name:var(--font-heading)] text-4xl font-bold tracking-tight">
                   {formatCurrencyDisplay(detail.quote.total_amount, detail.workshop.preferred_currency)}
                 </div>
               </div>
+              <p className="text-xs leading-5 text-white/70">Cualquier trabajo adicional o cambio de alcance requiere una nueva aprobación.</p>
+              {detail.workshop.warranty_terms ? <p className="text-xs leading-5 text-white/70">Garantía: {detail.workshop.warranty_terms}</p> : null}
+              {detail.workshop.document_terms ? <p className="text-xs leading-5 text-white/70">Condiciones: {detail.workshop.document_terms}</p> : null}
             </CardContent>
           </Card>
         </div>

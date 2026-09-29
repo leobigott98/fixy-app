@@ -20,7 +20,7 @@ import {
   type WorkOrderRecord,
 } from "@/lib/data/work-orders";
 import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
-import { canViewWorkOrderPrices } from "@/lib/permissions";
+import { canManageWorkOrders, canViewWorkOrderPrices } from "@/lib/permissions";
 import { formatCurrencyDisplay } from "@/lib/utils";
 import { getPreferredWorkOrdersView } from "@/lib/view-preferences";
 
@@ -70,7 +70,7 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
   const workshop = await requireCurrentWorkshop();
   const access = await getCurrentWorkshopAccess();
   const showPrices = access ? canViewWorkOrderPrices(access.role) : false;
-  const canManageOrders = access?.role !== "mechanic";
+  const canManageOrders = access ? canManageWorkOrders(access.role) : false;
   const params = await searchParams;
   const query = getQueryValue(params.q);
   const view = await getPreferredWorkOrdersView(getQueryValue(params.view));
@@ -271,9 +271,11 @@ export default async function WorkOrdersPage({ searchParams }: WorkOrdersPagePro
                 Crea tu primera orden manualmente o conviertela desde un presupuesto aprobado. El
                 objetivo es ver rapido que entra, que esta en reparacion y que ya se puede entregar.
               </p>
-              <Button asChild variant="primary">
-                <Link href={"/app/work-orders/new" as Route}>Crear primera orden</Link>
-              </Button>
+              {canManageOrders ? (
+                <Button asChild variant="primary">
+                  <Link href={"/app/work-orders/new" as Route}>Crear primera orden</Link>
+                </Button>
+              ) : null}
             </div>
             <div className="grid gap-3">
               {[

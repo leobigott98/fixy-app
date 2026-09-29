@@ -17,7 +17,7 @@ export function MobileNav({ role, notificationCount = 0 }: MobileNavProps) {
   const navigation = getMobileNavigation(role);
 
   return (
-    <nav className="fixed inset-x-4 bottom-4 z-40 rounded-[24px] border border-white/60 bg-[var(--surface-dark)] p-2 shadow-[0_20px_50px_rgba(7,31,39,0.22)] backdrop-blur lg:hidden">
+    <nav className="protected-app-mobile-nav fixed inset-x-4 bottom-4 z-40 rounded-[24px] border border-white/60 bg-[var(--surface-dark)] p-2 shadow-[0_20px_50px_rgba(7,31,39,0.22)] backdrop-blur lg:hidden">
       <div className={cn("gap-1", navigation.length >= 5 ? "grid grid-cols-5" : "grid grid-cols-4")}>
         {navigation.map((item) => {
           const Icon = item.icon;

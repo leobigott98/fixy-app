@@ -1,7 +1,8 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { buildQuoteFormDefaults, getQuoteForEdit, getQuoteFormOptions } from "@/lib/data/quotes";
-import { requireCurrentWorkshop } from "@/lib/data/workshops";
+import { getCurrentWorkshopAccess, requireCurrentWorkshop } from "@/lib/data/workshops";
+import { canViewInternalDocument } from "@/lib/permissions";
 
 type EditQuotePageProps = {
   params: Promise<{
@@ -10,7 +11,7 @@ type EditQuotePageProps = {
 };
 
 export default async function EditQuotePage({ params }: EditQuotePageProps) {
-  const workshop = await requireCurrentWorkshop();
+  const [workshop, access] = await Promise.all([requireCurrentWorkshop(), getCurrentWorkshopAccess()]);
   const { id } = await params;
   const [detail, options] = await Promise.all([getQuoteForEdit(id), getQuoteFormOptions()]);
 
@@ -28,6 +29,7 @@ export default async function EditQuotePage({ params }: EditQuotePageProps) {
         status="Presupuestos"
       />
       <QuoteForm
+        canManageCosts={Boolean(access && canViewInternalDocument(access.role))}
         initialValues={initialValues}
         mode="edit"
         options={options}
